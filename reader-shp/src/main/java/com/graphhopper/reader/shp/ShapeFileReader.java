@@ -46,75 +46,81 @@ import com.vividsolutions.jts.geom.Coordinate;
  */
 public abstract class ShapeFileReader implements DataReader {
 
-	private final GraphStorage graphStorage;
-	private final NodeAccess nodeAccess;
-	protected final Graph graph;
-	protected EncodingManager encodingManager;
+    private final GraphStorage graphStorage;
+    private final NodeAccess nodeAccess;
+    protected final Graph graph;
+    protected EncodingManager encodingManager;
 
-	public ShapeFileReader(GraphHopperStorage ghStorage) {
-		this.graphStorage = ghStorage;
-		this.graph = ghStorage;
-		this.nodeAccess = graph.getNodeAccess();
-	}
+    public ShapeFileReader(GraphHopperStorage ghStorage) {
+        this.graphStorage = ghStorage;
+        this.graph = ghStorage;
+        this.nodeAccess = graph.getNodeAccess();
+    }
 
-	@Override
-	public void readGraph()  {
-		graphStorage.create(1000);
-		processJunctions();
-		processRoads();
-	}
+    @Override
+    public void readGraph() {
+        graphStorage.create(1000);
+        processJunctions();
+        processRoads();
+    }
 
-	abstract void processJunctions() ;
+    abstract void processJunctions();
 
-	abstract void processRoads() ;
+    abstract void processRoads();
 
-	protected FeatureIterator<SimpleFeature> getFeatureIterator(DataStore dataStore) {
-	    try {
-	        String typeName = dataStore.getTypeNames()[0];
-	        FeatureSource<SimpleFeatureType, SimpleFeature> source = dataStore.getFeatureSource(typeName);
-	        Filter filter = Filter.INCLUDE;
-	        FeatureCollection<SimpleFeatureType, SimpleFeature> collection = source.getFeatures(filter);
+    protected FeatureIterator<SimpleFeature> getFeatureIterator(DataStore dataStore) {
+        if (dataStore == null)
+            throw new IllegalArgumentException("DataStore cannot be null for getFeatureIterator");
 
-	        FeatureIterator<SimpleFeature> features = collection.features();
-	        return features;
-            
+        try {
+            String typeName = dataStore.getTypeNames()[0];
+            FeatureSource<SimpleFeatureType, SimpleFeature> source = dataStore.getFeatureSource(typeName);
+            Filter filter = Filter.INCLUDE;
+            FeatureCollection<SimpleFeatureType, SimpleFeature> collection = source.getFeatures(filter);
+
+            FeatureIterator<SimpleFeature> features = collection.features();
+            return features;
+
         } catch (Exception e) {
             throw Utils.asUnchecked(e);
         }
-	}
+    }
 
     protected DataStore openShapefileDataStore(File file) {
         try {
             Map<String, Object> map = new HashMap<String, Object>();
             map.put("url", file.toURI().toURL());
-            return DataStoreFinder.getDataStore(map);
-            
+            DataStore ds = DataStoreFinder.getDataStore(map);
+            if (ds == null)
+                throw new IllegalArgumentException("Cannot find DataStore at " + file);
+            return ds;
+
         } catch (Exception e) {
             throw Utils.asUnchecked(e);
         }
-	}
+    }
 
-	/*
+    /*
 	 * Get longitude using the current long-lat order convention
-	 */
-	protected double lng(Coordinate coordinate) {
-		return coordinate.getOrdinate(0);
-	}
+     */
+    protected double lng(Coordinate coordinate) {
+        return coordinate.getOrdinate(0);
+    }
 
-	/*
+    /*
 	 * Get latitude using the current long-lat order convention
-	 */
-	protected double lat(Coordinate coordinate) {
-		return coordinate.getOrdinate(1);
-	}
+     */
+    protected double lat(Coordinate coordinate) {
+        return coordinate.getOrdinate(1);
+    }
 
-	protected void saveTowerPosition(int nodeId, Coordinate point) {
-		nodeAccess.setNode(nodeId, lat(point), lng(point));
-	}
+    protected void saveTowerPosition(int nodeId, Coordinate point) {
+        nodeAccess.setNode(nodeId, lat(point), lng(point));
+    }
 
-	@Override
-	public ShapeFileReader setEncodingManager(EncodingManager encodingManager) {
-		this.encodingManager = encodingManager;
-		return this;
-	}
+    @Override
+    public ShapeFileReader setEncodingManager(EncodingManager encodingManager) {
+        this.encodingManager = encodingManager;
+        return this;
+    }
 }

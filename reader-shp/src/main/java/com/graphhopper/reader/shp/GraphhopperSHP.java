@@ -25,7 +25,7 @@ import com.graphhopper.reader.shp.OSMShapeFileReader.EdgeAddedListener;
 import com.graphhopper.storage.GraphHopperStorage;
 
 /**
- * 
+ *
  * @author Phil
  *
  */

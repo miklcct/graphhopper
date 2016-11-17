@@ -56,10 +56,10 @@ public class OSMShapeFileReader extends ShapeFileReader {
     private static final int COORD_STATE_UNKNOWN = -1;
     private static final int COORD_STATE_PILLAR = -2;
     private static final int FIRST_NODE_ID = 1;
-    private static final String[] DIRECT_COPY_TAGS = new String[] { "name" };
+    private static final String[] DIRECT_COPY_TAGS = new String[]{"name"};
     private File roadsFile;
-    private TObjectIntHashMap<Coordinate> coordState = new TObjectIntHashMap<>(
-                    Constants.DEFAULT_CAPACITY, Constants.DEFAULT_LOAD_FACTOR, COORD_STATE_UNKNOWN);
+    private final TObjectIntHashMap<Coordinate> coordState = new TObjectIntHashMap<>(
+            Constants.DEFAULT_CAPACITY, Constants.DEFAULT_LOAD_FACTOR, COORD_STATE_UNKNOWN);
     private final DistanceCalc distCalc = Helper.DIST_EARTH;
     private static final Logger LOGGER = LoggerFactory.getLogger(OSMShapeFileReader.class);
     private final HashSet<EdgeAddedListener> edgeAddedListeners = new HashSet<>();
@@ -145,8 +145,10 @@ public class OSMShapeFileReader extends ShapeFileReader {
             }
         }
 
-        LOGGER.info("Number of junction points : " + (nextNodeId - FIRST_NODE_ID));
+        if (nextNodeId == FIRST_NODE_ID)
+            throw new IllegalArgumentException("No data found for roads file " + roadsFile);
 
+        LOGGER.info("Number of junction points : " + (nextNodeId - FIRST_NODE_ID));
     }
 
     @Override
@@ -181,8 +183,8 @@ public class OSMShapeFileReader extends ShapeFileReader {
                                 // get distance and estimated centres
                                 double distance = getWayLength(startTowerPnt, pillars, point);
                                 GHPoint estmCentre = new GHPoint(
-                                                0.5 * (lat(startTowerPnt) + lat(point)),
-                                                0.5 * (lng(startTowerPnt) + lng(point)));
+                                        0.5 * (lat(startTowerPnt) + lat(point)),
+                                        0.5 * (lng(startTowerPnt) + lng(point)));
                                 PointList pillarNodes = new PointList(pillars.size(), false);
 
                                 for (Coordinate pillar : pillars) {
@@ -190,7 +192,7 @@ public class OSMShapeFileReader extends ShapeFileReader {
                                 }
 
                                 addEdge(fromTowerNodeId, toTowerNodeId, road, distance, estmCentre,
-                                                pillarNodes);
+                                        pillarNodes);
                                 startTowerPnt = point;
                                 pillars.clear();
                             } else {
@@ -259,7 +261,7 @@ public class OSMShapeFileReader extends ShapeFileReader {
     }
 
     private void addEdge(int fromTower, int toTower, SimpleFeature road, double distance,
-                    GHPoint estmCentre, PointList pillarNodes) {
+                         GHPoint estmCentre, PointList pillarNodes) {
         EdgeIteratorState edge = graph.edge(fromTower, toTower);
 
         // read the OSM id, should never be null
@@ -314,7 +316,7 @@ public class OSMShapeFileReader extends ShapeFileReader {
                 val = "yes";
             } else {
                 throw new RuntimeException("Unrecognised value of oneway field \"" + val
-                                + "\" found in road with OSM id " + id);
+                        + "\" found in road with OSM id " + id);
             }
 
             way.setTag("oneway", val);

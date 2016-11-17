@@ -45,7 +45,7 @@ import com.graphhopper.util.PointList;
 import com.graphhopper.util.shapes.GHPoint;
 
 /**
- * 
+ *
  * @author Vikas Veshishth
  * @author Philip Welch
  */
@@ -94,7 +94,7 @@ public class ShapeFileReaderTest {
         final double maxSecs;
 
         private ExpectedDuration(double fromLat, double fromLng, double toLat, double toLng,
-                        double minSecs, double maxSecs) {
+                                 double minSecs, double maxSecs) {
             super(fromLat, fromLng, toLat, toLng);
             this.minSecs = minSecs;
             this.maxSecs = maxSecs;
@@ -113,9 +113,9 @@ public class ShapeFileReaderTest {
         // between pbf and shapefile readers
         gh.setWayPointMaxDistance(0);
         return gh.setStoreOnFlush(false).setDataReaderFile(inputFile)
-                        .setGraphHopperLocation(new File(outDir).getAbsolutePath())
-                        .setEncodingManager(new EncodingManager(new CarFlagEncoder()))
-                        .setCHEnabled(false).importOrLoad();
+                .setGraphHopperLocation(new File(outDir).getAbsolutePath())
+                .setEncodingManager(new EncodingManager(new CarFlagEncoder()))
+                .setCHEnabled(false).importOrLoad();
 
     }
 
@@ -186,7 +186,7 @@ public class ShapeFileReaderTest {
         // should be many times the physical separation between the points (as
         // we had to go round the block)
         double straightLineDistMetres = distCalc.calcDist(pair.from.lat, pair.from.lon, pair.to.lat,
-                        pair.to.lon);
+                pair.to.lon);
         assertTrue(metresShp > straightLineDistMetres * 25);
 
         // should be the same to within 1 cm
@@ -238,7 +238,7 @@ public class ShapeFileReaderTest {
         DoubleSummaryStatistics stats = new DoubleSummaryStatistics();
         for (int i = 0; i < nTests; i++) {
             FromToPair pair = new FromToPair(pointGenerator.randPoint(),
-                            pointGenerator.randPoint());
+                    pointGenerator.randPoint());
 
             // paths from random points can fail to don't assert on failure
             PathWrapper shpPath = pair.getPath(hopperShp, false);
@@ -264,7 +264,7 @@ public class ShapeFileReaderTest {
         // considered etc,
         // but we expect it to be small for a large number of tests
         double mean = stats.getAverage();
-        assertTrue("Should have a mean deviation in travel times of less than 1%",mean < 1.0);
+        assertTrue("Should have a mean deviation in travel times of less than 1%", mean < 1.0);
     }
 
     @Test
@@ -272,17 +272,15 @@ public class ShapeFileReaderTest {
 
         // try a couple of test points, with an expected time range that will
         // only fail if something is really bad...
-        ExpectedDuration[] expected = new ExpectedDuration[] {
-                        new ExpectedDuration(35.899167, 14.515171, 35.894126, 14.502983, 60,
-                                        60 * 6),
-                        new ExpectedDuration(35.899167, 14.515171, 35.877645, 14.398956, 8 * 60,
-                                        25 * 60),
-                        new ExpectedDuration(35.85817, 14.561348, 35.877645, 14.398956, 10 * 60,
-                                        30 * 60),
-                        new ExpectedDuration(35.812802, 14.528732, 35.979673, 14.335785, 20 * 60,
-                                        50 * 60),
-
-        };
+        ExpectedDuration[] expected = new ExpectedDuration[]{
+            new ExpectedDuration(35.899167, 14.515171, 35.894126, 14.502983, 60,
+            60 * 6),
+            new ExpectedDuration(35.899167, 14.515171, 35.877645, 14.398956, 8 * 60,
+            25 * 60),
+            new ExpectedDuration(35.85817, 14.561348, 35.877645, 14.398956, 10 * 60,
+            30 * 60),
+            new ExpectedDuration(35.812802, 14.528732, 35.979673, 14.335785, 20 * 60,
+            50 * 60),};
 
         // The chosen locations should have small deviations in travel times
         double tolDiffFromPbf = 0.01;
@@ -293,8 +291,8 @@ public class ShapeFileReaderTest {
             double frac = secsShp / secsPbf;
 
             String message = "From (" + ed.from + ") to (" + ed.to + ") expected " + ed.minSecs
-                            + " <= travelsecs <= " + ed.maxSecs + ", found " + secsShp
-                            + " secs, pbf was " + secsPbf + " secs, frac diff=" + frac;
+                    + " <= travelsecs <= " + ed.maxSecs + ", found " + secsShp
+                    + " secs, pbf was " + secsPbf + " secs, frac diff=" + frac;
             assertTrue(message, secsShp >= ed.minSecs);
             assertTrue(message, secsShp <= ed.maxSecs);
 

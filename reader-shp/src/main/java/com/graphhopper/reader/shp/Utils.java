@@ -22,7 +22,7 @@ import com.vividsolutions.jts.geom.Coordinate;
 import com.vividsolutions.jts.geom.GeometryFactory;
 
 /**
- * 
+ *
  * @author Phil
  *
  */
@@ -36,10 +36,10 @@ public class Utils {
         }
         return factory.createLineString(coords).toText();
     }
-    
-    public static RuntimeException asUnchecked(Throwable e){
-        if(RuntimeException.class.isInstance(e)){
-            return (RuntimeException)e;
+
+    public static RuntimeException asUnchecked(Throwable e) {
+        if (RuntimeException.class.isInstance(e)) {
+            return (RuntimeException) e;
         }
         return new RuntimeException(e);
     }
