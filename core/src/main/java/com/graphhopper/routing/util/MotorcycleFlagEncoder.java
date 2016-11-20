@@ -80,34 +80,35 @@ public class MotorcycleFlagEncoder extends CarFlagEncoder {
         trackTypeSpeedMap.put("grade5", 5); // ... no hard materials. soil/sand/grass
 
         avoidSet.add("motorway");
-        avoidSet.add("trunk");
-        avoidSet.add("motorroad");
+        //avoidSet.add("trunk");
+        //avoidSet.add("motorroad");
         avoidSet.add("residential");
 
+        preferSet.add("trunk");
         preferSet.add("primary");
         preferSet.add("secondary");
         preferSet.add("tertiary");
 
-        maxPossibleSpeed = 120;
+        maxPossibleSpeed = 70;
 
         // autobahn
-        defaultSpeedMap.put("motorway", 100);
-        defaultSpeedMap.put("motorway_link", 70);
-        defaultSpeedMap.put("motorroad", 90);
+        defaultSpeedMap.put("motorway", 70);
+        defaultSpeedMap.put("motorway_link", 60);
+        defaultSpeedMap.put("motorroad", 60);
         // bundesstraße
-        defaultSpeedMap.put("trunk", 80);
-        defaultSpeedMap.put("trunk_link", 75);
+        defaultSpeedMap.put("trunk", 55);
+        defaultSpeedMap.put("trunk_link", 40);
         // linking bigger town
-        defaultSpeedMap.put("primary", 65);
-        defaultSpeedMap.put("primary_link", 60);
+        defaultSpeedMap.put("primary", 45);
+        defaultSpeedMap.put("primary_link", 40);
         // linking towns + villages
-        defaultSpeedMap.put("secondary", 60);
-        defaultSpeedMap.put("secondary_link", 50);
+        defaultSpeedMap.put("secondary", 35);
+        defaultSpeedMap.put("secondary_link", 30);
         // streets without middle line separation
-        defaultSpeedMap.put("tertiary", 50);
-        defaultSpeedMap.put("tertiary_link", 40);
+        defaultSpeedMap.put("tertiary", 30);
+        defaultSpeedMap.put("tertiary_link", 30);
         defaultSpeedMap.put("unclassified", 30);
-        defaultSpeedMap.put("residential", 30);
+        defaultSpeedMap.put("residential", 25);
         // spielstraße
         defaultSpeedMap.put("living_street", 5);
         defaultSpeedMap.put("service", 20);

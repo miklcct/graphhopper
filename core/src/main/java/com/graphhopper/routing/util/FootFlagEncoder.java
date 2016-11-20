@@ -114,10 +114,10 @@ public class FootFlagEncoder extends AbstractFlagEncoder {
         avoidHighwayTags.add("tertiary_link");
 
         // for now no explicit avoiding #257
-        //avoidHighwayTags.add("cycleway"); 
+        avoidHighwayTags.add("cycleway"); 
         allowedHighwayTags.addAll(safeHighwayTags);
         allowedHighwayTags.addAll(avoidHighwayTags);
-        allowedHighwayTags.add("cycleway");
+        //allowedHighwayTags.add("cycleway");
         allowedHighwayTags.add("unclassified");
         allowedHighwayTags.add("road");
         // disallowed in some countries

@@ -73,6 +73,9 @@ public class CarFlagEncoder extends AbstractFlagEncoder {
         restrictedValues.add("military");
         restrictedValues.add("emergency");
 
+        // Issue 733
+        restrictedValues.add("destination");
+
         intendedValues.add("yes");
         intendedValues.add("permissive");
 
@@ -108,26 +111,26 @@ public class CarFlagEncoder extends AbstractFlagEncoder {
         // limit speed on bad surfaces to 30 km/h
         badSurfaceSpeed = 30;
 
-        maxPossibleSpeed = 140;
+        maxPossibleSpeed = 110;
 
         // autobahn
-        defaultSpeedMap.put("motorway", 100);
-        defaultSpeedMap.put("motorway_link", 70);
-        defaultSpeedMap.put("motorroad", 90);
+        defaultSpeedMap.put("motorway", 80);
+        defaultSpeedMap.put("motorway_link", 60);
+        defaultSpeedMap.put("motorroad", 70);
         // bundesstraße
-        defaultSpeedMap.put("trunk", 70);
-        defaultSpeedMap.put("trunk_link", 65);
+        defaultSpeedMap.put("trunk", 60);
+        defaultSpeedMap.put("trunk_link", 40);
         // linking bigger town
-        defaultSpeedMap.put("primary", 65);
-        defaultSpeedMap.put("primary_link", 60);
+        defaultSpeedMap.put("primary", 45);
+        defaultSpeedMap.put("primary_link", 40);
         // linking towns + villages
-        defaultSpeedMap.put("secondary", 60);
-        defaultSpeedMap.put("secondary_link", 50);
+        defaultSpeedMap.put("secondary", 35);
+        defaultSpeedMap.put("secondary_link", 30);
         // streets without middle line separation
-        defaultSpeedMap.put("tertiary", 50);
-        defaultSpeedMap.put("tertiary_link", 40);
-        defaultSpeedMap.put("unclassified", 30);
-        defaultSpeedMap.put("residential", 30);
+        defaultSpeedMap.put("tertiary", 30);
+        defaultSpeedMap.put("tertiary_link", 25);
+        defaultSpeedMap.put("unclassified", 25);
+        defaultSpeedMap.put("residential", 20);
         // spielstraße
         defaultSpeedMap.put("living_street", 5);
         defaultSpeedMap.put("service", 20);
