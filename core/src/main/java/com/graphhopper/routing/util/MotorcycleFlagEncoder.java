@@ -80,6 +80,7 @@ public class MotorcycleFlagEncoder extends CarFlagEncoder {
         trackTypeSpeedMap.put("grade5", 5); // ... no hard materials. soil/sand/grass
 
         avoidSet.add("motorway");
+        avoidSet.add("motorway_link");
         //avoidSet.add("trunk");
         //avoidSet.add("motorroad");
         avoidSet.add("residential");
