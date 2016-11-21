@@ -86,8 +86,8 @@ public class MotorcycleFlagEncoder extends CarFlagEncoder {
 
         preferSet.add("trunk");
         preferSet.add("primary");
-        preferSet.add("secondary");
-        preferSet.add("tertiary");
+        //preferSet.add("secondary");
+        //preferSet.add("tertiary");
 
         maxPossibleSpeed = 70;
 
@@ -102,10 +102,10 @@ public class MotorcycleFlagEncoder extends CarFlagEncoder {
         defaultSpeedMap.put("primary", 45);
         defaultSpeedMap.put("primary_link", 40);
         // linking towns + villages
-        defaultSpeedMap.put("secondary", 35);
-        defaultSpeedMap.put("secondary_link", 30);
+        defaultSpeedMap.put("secondary", 40);
+        defaultSpeedMap.put("secondary_link", 35);
         // streets without middle line separation
-        defaultSpeedMap.put("tertiary", 30);
+        defaultSpeedMap.put("tertiary", 35);
         defaultSpeedMap.put("tertiary_link", 30);
         defaultSpeedMap.put("unclassified", 30);
         defaultSpeedMap.put("residential", 25);
@@ -314,9 +314,9 @@ public class MotorcycleFlagEncoder extends CarFlagEncoder {
     private int handlePriority(ReaderWay way, long relationFlags) {
         String highway = way.getTag("highway", "");
         if (avoidSet.contains(highway)) {
-            return PriorityCode.WORST.getValue();
+            return PriorityCode.REACH_DEST.getValue();
         } else if (preferSet.contains(highway)) {
-            return PriorityCode.BEST.getValue();
+            return PriorityCode.VERY_NICE.getValue();
         }
 
         return PriorityCode.UNCHANGED.getValue();
