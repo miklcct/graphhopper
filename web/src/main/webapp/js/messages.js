@@ -36,7 +36,9 @@ module.exports.getSignName = function (sign) {
     else if (sign === 6)
         return "roundabout";
     else if (sign === 101)
-        return "transfer_to";
+        return "pt_start_trip";
+    else if (sign === 102)
+        return "pt_transfer_to";
     else
         throw "did not find sign " + sign;
 };
