@@ -1,5 +1,6 @@
 # do not edit manually, instead use spreadsheet https://t.co/f086oJXAEI and script ./core/files/update-translations.sh
 
+transfer_to=umsteigen auf
 continue=geradeaus
 continue_onto=geradeaus auf %1$s
 turn_left=links abbiegen

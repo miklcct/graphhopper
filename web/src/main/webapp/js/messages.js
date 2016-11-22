@@ -35,6 +35,8 @@ module.exports.getSignName = function (sign) {
         return "marker-icon-blue";
     else if (sign === 6)
         return "roundabout";
+    else if (sign === 101)
+        return "transfer_to";
     else
         throw "did not find sign " + sign;
 };
