@@ -4,15 +4,15 @@ import com.graphhopper.routing.util.EdgeFilter;
 import com.graphhopper.util.EdgeIteratorState;
 
 class EverythingButPt implements EdgeFilter {
-    private final GtfsStorage gtfsStorage;
 
-    EverythingButPt(GtfsStorage gtfsStorage) {
-        this.gtfsStorage = gtfsStorage;
+    PtFlagEncoder encoder;
+
+    EverythingButPt(PtFlagEncoder encoder) {
+        this.encoder = encoder;
     }
 
     @Override
-public boolean accept(EdgeIteratorState edgeState) {
-AbstractPtEdge edge = gtfsStorage.getEdges().get(edgeState.getEdge());
-return edge == null;
-}
+    public boolean accept(EdgeIteratorState edgeState) {
+        return encoder.getEdgeType(edgeState.getFlags()) == GtfsStorage.EdgeType.UNSPECIFIED;
+    }
 }

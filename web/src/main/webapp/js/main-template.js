@@ -615,12 +615,12 @@ function routeLatLng(request, doQuery) {
             buttons.append('|');
             buttons.append(miButton);
 
-            routeInfo.append(buttons);
+            routeInfo.append(buttons);            
 
             if (request.hasElevation()) {
                 routeInfo.append(translate.createEleInfoString(path.ascend, path.descend, request.useMiles));
             }
-
+            
             routeInfo.append($("<div style='clear:both'/>"));
             oneTab.append(routeInfo);
 
