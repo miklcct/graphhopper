@@ -349,7 +349,7 @@ public abstract class AbstractFlagEncoder implements FlagEncoder, TurnCostEncode
         if (backSpeed >= 0 && (maxSpeed < 0 || backSpeed < maxSpeed))
             maxSpeed = backSpeed;
 
-        return maxSpeed;
+        return maxSpeed == -1 ? 50 : maxSpeed;
     }
 
     @Override
