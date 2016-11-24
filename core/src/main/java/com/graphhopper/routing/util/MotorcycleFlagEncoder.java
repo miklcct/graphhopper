@@ -100,7 +100,7 @@ public class MotorcycleFlagEncoder extends CarFlagEncoder {
         defaultSpeedMap.put("trunk", 55);
         defaultSpeedMap.put("trunk_link", 40);
         // linking bigger town
-        defaultSpeedMap.put("primary", 45);
+        defaultSpeedMap.put("primary", 50);
         defaultSpeedMap.put("primary_link", 40);
         // linking towns + villages
         defaultSpeedMap.put("secondary", 40);
@@ -108,11 +108,11 @@ public class MotorcycleFlagEncoder extends CarFlagEncoder {
         // streets without middle line separation
         defaultSpeedMap.put("tertiary", 35);
         defaultSpeedMap.put("tertiary_link", 30);
-        defaultSpeedMap.put("unclassified", 30);
-        defaultSpeedMap.put("residential", 25);
+        defaultSpeedMap.put("unclassified", 25);
+        defaultSpeedMap.put("residential", 20);
         // spielstraße
         defaultSpeedMap.put("living_street", 5);
-        defaultSpeedMap.put("service", 20);
+        defaultSpeedMap.put("service", 15);
         // unknown road
         defaultSpeedMap.put("road", 20);
         // forestry stuff
