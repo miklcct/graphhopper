@@ -83,11 +83,11 @@ public class MotorcycleFlagEncoder extends CarFlagEncoder {
         avoidSet.add("motorway_link");
         //avoidSet.add("trunk");
         //avoidSet.add("motorroad");
-        avoidSet.add("residential");
+        //avoidSet.add("residential");
 
         preferSet.add("trunk");
         preferSet.add("primary");
-        //preferSet.add("secondary");
+        preferSet.add("secondary");
         //preferSet.add("tertiary");
 
         maxPossibleSpeed = 70;
@@ -315,7 +315,7 @@ public class MotorcycleFlagEncoder extends CarFlagEncoder {
     private int handlePriority(ReaderWay way, long relationFlags) {
         String highway = way.getTag("highway", "");
         if (avoidSet.contains(highway)) {
-            return PriorityCode.REACH_DEST.getValue();
+            return PriorityCode.WORST.getValue();
         } else if (preferSet.contains(highway)) {
             return PriorityCode.VERY_NICE.getValue();
         }
