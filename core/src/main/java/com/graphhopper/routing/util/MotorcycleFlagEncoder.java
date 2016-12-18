@@ -87,7 +87,7 @@ public class MotorcycleFlagEncoder extends CarFlagEncoder {
 
         preferSet.add("trunk");
         preferSet.add("primary");
-        preferSet.add("secondary");
+        //preferSet.add("secondary");
         //preferSet.add("tertiary");
 
         maxPossibleSpeed = 70;
@@ -100,15 +100,15 @@ public class MotorcycleFlagEncoder extends CarFlagEncoder {
         defaultSpeedMap.put("trunk", 55);
         defaultSpeedMap.put("trunk_link", 40);
         // linking bigger town
-        defaultSpeedMap.put("primary", 50);
-        defaultSpeedMap.put("primary_link", 40);
+        defaultSpeedMap.put("primary", 45);
+        defaultSpeedMap.put("primary_link", 35);
         // linking towns + villages
-        defaultSpeedMap.put("secondary", 40);
-        defaultSpeedMap.put("secondary_link", 35);
+        defaultSpeedMap.put("secondary", 35);
+        defaultSpeedMap.put("secondary_link", 30);
         // streets without middle line separation
-        defaultSpeedMap.put("tertiary", 35);
-        defaultSpeedMap.put("tertiary_link", 30);
-        defaultSpeedMap.put("unclassified", 25);
+        defaultSpeedMap.put("tertiary", 30);
+        defaultSpeedMap.put("tertiary_link", 25);
+        defaultSpeedMap.put("unclassified", 20);
         defaultSpeedMap.put("residential", 20);
         // spielstraße
         defaultSpeedMap.put("living_street", 5);

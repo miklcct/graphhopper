@@ -121,19 +121,19 @@ public class CarFlagEncoder extends AbstractFlagEncoder {
         defaultSpeedMap.put("trunk", 60);
         defaultSpeedMap.put("trunk_link", 40);
         // linking bigger town
-        defaultSpeedMap.put("primary", 50);
-        defaultSpeedMap.put("primary_link", 40);
+        defaultSpeedMap.put("primary", 45);
+        defaultSpeedMap.put("primary_link", 35);
         // linking towns + villages
-        defaultSpeedMap.put("secondary", 35);
-        defaultSpeedMap.put("secondary_link", 30);
+        defaultSpeedMap.put("secondary", 30);
+        defaultSpeedMap.put("secondary_link", 20);
         // streets without middle line separation
-        defaultSpeedMap.put("tertiary", 30);
-        defaultSpeedMap.put("tertiary_link", 25);
-        defaultSpeedMap.put("unclassified", 20);
+        defaultSpeedMap.put("tertiary", 20);
+        defaultSpeedMap.put("tertiary_link", 15);
+        defaultSpeedMap.put("unclassified", 15);
         defaultSpeedMap.put("residential", 15);
         // spielstraße
         defaultSpeedMap.put("living_street", 5);
-        defaultSpeedMap.put("service", 10);
+        defaultSpeedMap.put("service", 8);
         // unknown road
         defaultSpeedMap.put("road", 20);
         // forestry stuff
