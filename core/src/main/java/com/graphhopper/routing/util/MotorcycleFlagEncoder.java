@@ -79,8 +79,8 @@ public class MotorcycleFlagEncoder extends CarFlagEncoder {
         trackTypeSpeedMap.put("grade4", 5); // ... some hard or compressed materials
         trackTypeSpeedMap.put("grade5", 5); // ... no hard materials. soil/sand/grass
 
-        avoidSet.add("motorway");
-        avoidSet.add("motorway_link");
+        //avoidSet.add("motorway");
+        //avoidSet.add("motorway_link");
         //avoidSet.add("trunk");
         //avoidSet.add("motorroad");
         //avoidSet.add("residential");
@@ -204,7 +204,7 @@ public class MotorcycleFlagEncoder extends CarFlagEncoder {
 
             double maxMCSpeed = parseSpeed(way.getTag("maxspeed:motorcycle"));
             if (maxMCSpeed > 0 && maxMCSpeed < speed)
-                speed = maxMCSpeed * 0.9;
+                speed = maxMCSpeed;
 
             // limit speed to max 30 km/h if bad surface
             if (speed > 30 && way.hasTag("surface", badSurfaceSpeedMap))
@@ -315,7 +315,7 @@ public class MotorcycleFlagEncoder extends CarFlagEncoder {
     private int handlePriority(ReaderWay way, long relationFlags) {
         String highway = way.getTag("highway", "");
         if (avoidSet.contains(highway)) {
-            return PriorityCode.WORST.getValue();
+            return PriorityCode.REACH_DEST.getValue();
         } else if (preferSet.contains(highway)) {
             return PriorityCode.VERY_NICE.getValue();
         }
