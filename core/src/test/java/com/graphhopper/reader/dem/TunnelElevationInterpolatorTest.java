@@ -17,18 +17,15 @@
  */
 package com.graphhopper.reader.dem;
 
-import static org.junit.Assert.assertEquals;
+import com.graphhopper.coll.GHIntHashSet;
 
-import java.util.Arrays;
-import java.util.Collections;
+import static org.junit.Assert.assertEquals;
 
 import org.junit.Test;
 
 import com.graphhopper.reader.ReaderWay;
 import com.graphhopper.storage.NodeAccess;
 import com.graphhopper.util.EdgeIteratorState;
-
-import gnu.trove.set.hash.TIntHashSet;
 
 /**
  * @author Alexey Valikov
@@ -52,13 +49,12 @@ public class TunnelElevationInterpolatorTest extends AbstractEdgeElevationInterp
     public void doesNotInterpolateElevationOfTunnelWithZeroOuterNodes() {
 
         // @formatter:off
-		/*
-		 * Graph structure:
+        /*
+         * Graph structure:
 		 * 0--T--1--T--2     3--T--4
 		 * Tunnel 0-1-2 has a single outer node 2.
-		 */
+         */
         // @formatter:on
-
         NodeAccess na = graph.getNodeAccess();
         na.setNode(0, 0, 0, 0);
         na.setNode(1, 10, 0, 0);
@@ -74,12 +70,12 @@ public class TunnelElevationInterpolatorTest extends AbstractEdgeElevationInterp
         edge12.setFlags(dataFlagEncoder.handleWayTags(interpolatableWay, 1, 0));
         edge34.setFlags(dataFlagEncoder.handleWayTags(interpolatableWay, 1, 0));
 
-        final TIntHashSet outerNodeIds = new TIntHashSet();
-        final TIntHashSet innerNodeIds = new TIntHashSet();
+        final GHIntHashSet outerNodeIds = new GHIntHashSet();
+        final GHIntHashSet innerNodeIds = new GHIntHashSet();
         gatherOuterAndInnerNodeIdsOfStructure(edge01, outerNodeIds, innerNodeIds);
 
-        assertEquals(new TIntHashSet(Collections.<Integer>emptyList()), outerNodeIds);
-        assertEquals(new TIntHashSet(Arrays.asList(0, 1, 2)), innerNodeIds);
+        assertEquals(GHIntHashSet.from(), outerNodeIds);
+        assertEquals(GHIntHashSet.from(0, 1, 2), innerNodeIds);
 
         edgeElevationInterpolator.execute();
         assertEquals(0, na.getElevation(0), PRECISION);
@@ -93,12 +89,11 @@ public class TunnelElevationInterpolatorTest extends AbstractEdgeElevationInterp
     public void interpolatesElevationOfTunnelWithSingleOuterNode() {
 
         // @formatter:off
-		/*
+        /*
 		 * Graph structure:
 		 * 0--T--1--T--2-----3--T--4
-		 */
+         */
         // @formatter:on
-
         NodeAccess na = graph.getNodeAccess();
         na.setNode(0, 0, 0, 0);
         na.setNode(1, 10, 0, 00);
@@ -116,12 +111,12 @@ public class TunnelElevationInterpolatorTest extends AbstractEdgeElevationInterp
         edge23.setFlags(dataFlagEncoder.handleWayTags(normalWay, 1, 0));
         edge34.setFlags(dataFlagEncoder.handleWayTags(interpolatableWay, 1, 0));
 
-        final TIntHashSet outerNodeIds = new TIntHashSet();
-        final TIntHashSet innerNodeIds = new TIntHashSet();
+        final GHIntHashSet outerNodeIds = new GHIntHashSet();
+        final GHIntHashSet innerNodeIds = new GHIntHashSet();
         gatherOuterAndInnerNodeIdsOfStructure(edge01, outerNodeIds, innerNodeIds);
 
-        assertEquals(new TIntHashSet(Arrays.asList(2)), outerNodeIds);
-        assertEquals(new TIntHashSet(Arrays.asList(0, 1)), innerNodeIds);
+        assertEquals(GHIntHashSet.from(2), outerNodeIds);
+        assertEquals(GHIntHashSet.from(0, 1), innerNodeIds);
 
         edgeElevationInterpolator.execute();
         assertEquals(10, na.getElevation(0), PRECISION);
@@ -135,12 +130,11 @@ public class TunnelElevationInterpolatorTest extends AbstractEdgeElevationInterp
     public void interpolatesElevationOfTunnelWithTwoOuterNodes() {
 
         // @formatter:off
-		/*
+        /*
 		 * Graph structure:
 		 * 0-----1--T--2--T--3-----4
-		 */
+         */
         // @formatter:on
-
         NodeAccess na = graph.getNodeAccess();
         na.setNode(0, 0, 0, 0);
         na.setNode(1, 10, 0, 10);
@@ -158,12 +152,12 @@ public class TunnelElevationInterpolatorTest extends AbstractEdgeElevationInterp
         edge23.setFlags(dataFlagEncoder.handleWayTags(interpolatableWay, 1, 0));
         edge34.setFlags(dataFlagEncoder.handleWayTags(normalWay, 1, 0));
 
-        final TIntHashSet outerNodeIds = new TIntHashSet();
-        final TIntHashSet innerNodeIds = new TIntHashSet();
+        final GHIntHashSet outerNodeIds = new GHIntHashSet();
+        final GHIntHashSet innerNodeIds = new GHIntHashSet();
         gatherOuterAndInnerNodeIdsOfStructure(edge12, outerNodeIds, innerNodeIds);
 
-        assertEquals(new TIntHashSet(Arrays.asList(1, 3)), outerNodeIds);
-        assertEquals(new TIntHashSet(Arrays.asList(2)), innerNodeIds);
+        assertEquals(GHIntHashSet.from(1, 3), outerNodeIds);
+        assertEquals(GHIntHashSet.from(2), innerNodeIds);
 
         edgeElevationInterpolator.execute();
         assertEquals(0, na.getElevation(0), PRECISION);
@@ -177,7 +171,7 @@ public class TunnelElevationInterpolatorTest extends AbstractEdgeElevationInterp
     public void interpolatesElevationOfTunnelWithThreeOuterNodes() {
 
         // @formatter:off
-		/*
+        /*
 		 * Graph structure:
 		 * 0-----1--T--2--T--3-----4
 		 *             |
@@ -186,9 +180,8 @@ public class TunnelElevationInterpolatorTest extends AbstractEdgeElevationInterp
 		 *             |
 		 *             |
 		 *             5--T--6-----7
-		 */
+         */
         // @formatter:on
-
         NodeAccess na = graph.getNodeAccess();
         na.setNode(0, 0, 0, 0);
         na.setNode(1, 10, 0, 10);
@@ -215,12 +208,12 @@ public class TunnelElevationInterpolatorTest extends AbstractEdgeElevationInterp
         edge56.setFlags(dataFlagEncoder.handleWayTags(interpolatableWay, 1, 0));
         edge67.setFlags(dataFlagEncoder.handleWayTags(normalWay, 1, 0));
 
-        final TIntHashSet outerNodeIds = new TIntHashSet();
-        final TIntHashSet innerNodeIds = new TIntHashSet();
+        final GHIntHashSet outerNodeIds = new GHIntHashSet();
+        final GHIntHashSet innerNodeIds = new GHIntHashSet();
         gatherOuterAndInnerNodeIdsOfStructure(edge12, outerNodeIds, innerNodeIds);
 
-        assertEquals(new TIntHashSet(Arrays.asList(1, 3, 6)), outerNodeIds);
-        assertEquals(new TIntHashSet(Arrays.asList(2, 5)), innerNodeIds);
+        assertEquals(GHIntHashSet.from(1, 3, 6), outerNodeIds);
+        assertEquals(GHIntHashSet.from(2, 5), innerNodeIds);
 
         edgeElevationInterpolator.execute();
         assertEquals(0, na.getElevation(0), PRECISION);
@@ -237,18 +230,17 @@ public class TunnelElevationInterpolatorTest extends AbstractEdgeElevationInterp
     public void interpolatesElevationOfTunnelWithFourOuterNodes() {
 
         // @formatter:off
-		/*
-		 * Graph structure:
-		 * 0-----1--T--2--T--3-----4
-		 *             |
-		 *             |
-		 *             T
-		 *             |
-		 *             |
-		 * 5-----6--T--7--T--8-----9
-		 */
+        /*
+            * Graph structure:
+            * 0-----1--T--2--T--3-----4
+            *             |
+            *             |
+            *             T
+            *             |
+            *             |
+            * 5-----6--T--7--T--8-----9
+         */
         // @formatter:on
-
         NodeAccess na = graph.getNodeAccess();
         na.setNode(0, 0, 0, 0);
         na.setNode(1, 10, 0, 10);
@@ -283,12 +275,12 @@ public class TunnelElevationInterpolatorTest extends AbstractEdgeElevationInterp
 
         edge27.setFlags(dataFlagEncoder.handleWayTags(interpolatableWay, 1, 0));
 
-        final TIntHashSet outerNodeIds = new TIntHashSet();
-        final TIntHashSet innerNodeIds = new TIntHashSet();
+        final GHIntHashSet outerNodeIds = new GHIntHashSet();
+        final GHIntHashSet innerNodeIds = new GHIntHashSet();
         gatherOuterAndInnerNodeIdsOfStructure(edge12, outerNodeIds, innerNodeIds);
 
-        assertEquals(new TIntHashSet(Arrays.asList(1, 3, 6, 8)), outerNodeIds);
-        assertEquals(new TIntHashSet(Arrays.asList(2, 7)), innerNodeIds);
+        assertEquals(GHIntHashSet.from(1, 3, 6, 8), outerNodeIds);
+        assertEquals(GHIntHashSet.from(2, 7), innerNodeIds);
 
         edgeElevationInterpolator.execute();
         assertEquals(0, na.getElevation(0), PRECISION);

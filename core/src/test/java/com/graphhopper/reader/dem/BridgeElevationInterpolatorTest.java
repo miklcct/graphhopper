@@ -17,9 +17,9 @@
  */
 package com.graphhopper.reader.dem;
 
-import static org.junit.Assert.assertEquals;
+import com.graphhopper.coll.GHIntHashSet;
 
-import java.util.Arrays;
+import static org.junit.Assert.assertEquals;
 
 import org.junit.Test;
 
@@ -28,8 +28,6 @@ import com.graphhopper.storage.NodeAccess;
 import com.graphhopper.util.EdgeIteratorState;
 import com.graphhopper.util.Helper;
 import com.graphhopper.util.PointList;
-
-import gnu.trove.set.hash.TIntHashSet;
 
 /**
  * @author Alexey Valikov
@@ -44,6 +42,7 @@ public class BridgeElevationInterpolatorTest extends AbstractEdgeElevationInterp
         return bridgeWay;
     }
 
+    @Override
     protected AbstractEdgeElevationInterpolator createEdgeElevationInterpolator() {
         return new BridgeElevationInterpolator(graph, dataFlagEncoder);
     }
@@ -52,8 +51,8 @@ public class BridgeElevationInterpolatorTest extends AbstractEdgeElevationInterp
     public void interpolatesElevationOfPillarNodes() {
 
         // @formatter:off
-		/*
-		 * Graph structure:
+        /*
+         * Graph structure:
 		 * 0-----1-----2-----3-----4
 		 *        \    |    /
 		 *         \   |   /
@@ -61,9 +60,8 @@ public class BridgeElevationInterpolatorTest extends AbstractEdgeElevationInterp
 		 *           \ | /
 		 *            \|/
 		 * 5-----6--T--7--T--8-----9
-		 */
+         */
         // @formatter:on
-
         NodeAccess na = graph.getNodeAccess();
         na.setNode(0, 0, 0, 0);
         na.setNode(1, 10, 0, 10);
@@ -88,7 +86,7 @@ public class BridgeElevationInterpolatorTest extends AbstractEdgeElevationInterp
         EdgeIteratorState edge27 = graph.edge(2, 7, 10, true);
         EdgeIteratorState edge37 = graph.edge(3, 7, 10, true);
         edge17.setWayGeometry(
-                        Helper.createPointList3D(12, 2, 200, 14, 4, 400, 16, 6, 600, 18, 8, 800));
+                Helper.createPointList3D(12, 2, 200, 14, 4, 400, 16, 6, 600, 18, 8, 800));
 
         edge01.setFlags(dataFlagEncoder.handleWayTags(normalWay, 1, 0));
         edge12.setFlags(dataFlagEncoder.handleWayTags(normalWay, 1, 0));
@@ -104,12 +102,12 @@ public class BridgeElevationInterpolatorTest extends AbstractEdgeElevationInterp
         edge27.setFlags(dataFlagEncoder.handleWayTags(interpolatableWay, 1, 0));
         edge37.setFlags(dataFlagEncoder.handleWayTags(interpolatableWay, 1, 0));
 
-        final TIntHashSet outerNodeIds = new TIntHashSet();
-        final TIntHashSet innerNodeIds = new TIntHashSet();
+        final GHIntHashSet outerNodeIds = new GHIntHashSet();
+        final GHIntHashSet innerNodeIds = new GHIntHashSet();
         gatherOuterAndInnerNodeIdsOfStructure(edge27, outerNodeIds, innerNodeIds);
 
-        assertEquals(new TIntHashSet(Arrays.asList(1, 2, 3, 6, 8)), outerNodeIds);
-        assertEquals(new TIntHashSet(Arrays.asList(7)), innerNodeIds);
+        assertEquals(GHIntHashSet.from(1, 2, 3, 6, 8), outerNodeIds);
+        assertEquals(GHIntHashSet.from(7), innerNodeIds);
 
         edgeElevationInterpolator.execute();
         assertEquals(0, na.getElevation(0), PRECISION);

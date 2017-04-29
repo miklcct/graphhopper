@@ -17,13 +17,14 @@
  */
 package com.graphhopper.routing.subnetwork;
 
+import com.carrotsearch.hppc.IntArrayDeque;
+import com.carrotsearch.hppc.IntArrayList;
 import com.graphhopper.coll.GHBitSet;
 import com.graphhopper.coll.GHBitSetImpl;
 import com.graphhopper.routing.util.EdgeFilter;
 import com.graphhopper.storage.GraphHopperStorage;
+import com.graphhopper.util.EdgeExplorer;
 import com.graphhopper.util.EdgeIterator;
-import gnu.trove.list.array.TIntArrayList;
-import gnu.trove.stack.array.TIntArrayStack;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -38,9 +39,10 @@ import java.util.Stack;
  * http://www.timl.id.au/?p=327 and http://homepages.ecs.vuw.ac.nz/~djp/files/P05.pdf
  */
 public class TarjansSCCAlgorithm {
-    private final ArrayList<TIntArrayList> components = new ArrayList<TIntArrayList>();
+    private final ArrayList<IntArrayList> components = new ArrayList<IntArrayList>();
+    // TODO use just the Graph interface here
     private final GraphHopperStorage graph;
-    private final TIntArrayStack nodeStack;
+    private final IntArrayDeque nodeStack;
     private final GHBitSet onStack;
     private final GHBitSet ignoreSet;
     private final int[] nodeIndex;
@@ -48,21 +50,41 @@ public class TarjansSCCAlgorithm {
     private final EdgeFilter edgeFilter;
     private int index = 1;
 
-    public TarjansSCCAlgorithm(GraphHopperStorage graph, GHBitSet ignoreSet,
-                               final EdgeFilter edgeFilter) {
-        this.graph = graph;
-        this.nodeStack = new TIntArrayStack();
-        this.onStack = new GHBitSetImpl(graph.getNodes());
-        this.nodeIndex = new int[graph.getNodes()];
-        this.nodeLowLink = new int[graph.getNodes()];
+    public TarjansSCCAlgorithm(GraphHopperStorage ghStorage, final EdgeFilter edgeFilter, boolean ignoreSingleEntries) {
+        this.graph = ghStorage;
+        this.nodeStack = new IntArrayDeque();
+        this.onStack = new GHBitSetImpl(ghStorage.getNodes());
+        this.nodeIndex = new int[ghStorage.getNodes()];
+        this.nodeLowLink = new int[ghStorage.getNodes()];
         this.edgeFilter = edgeFilter;
-        this.ignoreSet = ignoreSet;
+
+        if (ignoreSingleEntries) {
+            // Very important case to boost performance - see #520. Exclude single entry components as we don't need them! 
+            // But they'll be created a lot for multiple vehicles because many nodes e.g. for foot are not accessible at all for car.
+            // We can ignore these single entry components as they are already set 'not accessible'
+            EdgeExplorer explorer = ghStorage.createEdgeExplorer(edgeFilter);
+            int nodes = ghStorage.getNodes();
+            ignoreSet = new GHBitSetImpl(ghStorage.getNodes());
+            for (int start = 0; start < nodes; start++) {
+                if (!ghStorage.isNodeRemoved(start)) {
+                    EdgeIterator iter = explorer.setBaseNode(start);
+                    if (!iter.next())
+                        ignoreSet.add(start);
+                }
+            }
+        } else {
+            ignoreSet = new GHBitSetImpl();
+        }
+    }
+
+    public GHBitSet getIgnoreSet() {
+        return ignoreSet;
     }
 
     /**
      * Find and return list of all strongly connected components in g.
      */
-    public List<TIntArrayList> findComponents() {
+    public List<IntArrayList> findComponents() {
         int nodes = graph.getNodes();
         for (int start = 0; start < nodes; start++) {
             if (nodeIndex[start] == 0
@@ -97,7 +119,7 @@ public class TarjansSCCAlgorithm {
                 nodeIndex[start] = index;
                 nodeLowLink[start] = index;
                 index++;
-                nodeStack.push(start);
+                nodeStack.addLast(start);
                 onStack.add(start);
 
                 iter = graph.createEdgeExplorer(edgeFilter).setBaseNode(start);
@@ -131,9 +153,9 @@ public class TarjansSCCAlgorithm {
             // If nodeLowLink == nodeIndex, then we are the first element in a component.
             // Add all nodes higher up on nodeStack to this component.
             if (nodeIndex[start] == nodeLowLink[start]) {
-                TIntArrayList component = new TIntArrayList();
+                IntArrayList component = new IntArrayList();
                 int node;
-                while ((node = nodeStack.pop()) != start) {
+                while ((node = nodeStack.removeLast()) != start) {
                     component.add(node);
                     onStack.remove(node);
                 }

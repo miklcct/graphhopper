@@ -24,6 +24,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.awt.*;
+import java.awt.geom.AffineTransform;
+import java.awt.geom.Path2D;
 
 /**
  * @author Peter Karich
@@ -65,6 +67,33 @@ public class GraphicsWrapper {
         g2.drawString(text, (int) getX(lon) + 5, (int) getY(lat) + 5);
     }
 
+    public void plotDirectedEdge(Graphics2D g2, double lat, double lon, double lat2, double lon2, float width) {
+
+        g2.setStroke(new BasicStroke(width));
+        int startLon = (int) getX(lon);
+        int startLat = (int) getY(lat);
+        int destLon = (int) getX(lon2);
+        int destLat = (int) getY(lat2);
+
+        g2.drawLine(startLon, startLat, destLon, destLat);
+
+        // only for deep zoom show direction
+        if (scaleX < 0.0001) {
+            g2.setStroke(new BasicStroke(3));
+            Path2D.Float path = new Path2D.Float();
+            path.moveTo(destLon, destLat);
+            path.lineTo(destLon + 6, destLat - 2);
+            path.lineTo(destLon + 6, destLat + 2);
+            path.lineTo(destLon, destLat);
+
+            AffineTransform at = new AffineTransform();
+            double angle = Math.atan2(lat2 - lat, lon2 - lon);
+            at.rotate(-angle + Math.PI, destLon, destLat);
+            path.transform(at);
+            g2.draw(path);
+        }
+    }
+
     public void plotEdge(Graphics2D g2, double lat, double lon, double lat2, double lon2, float width) {
         g2.setStroke(new BasicStroke(width));
         g2.drawLine((int) getX(lon), (int) getY(lat), (int) getX(lon2), (int) getY(lat2));
@@ -91,6 +120,10 @@ public class GraphicsWrapper {
     }
 
     public void plotNode(Graphics2D g2, int loc, Color c) {
+        plotNode(g2, loc, c, 4);
+    }
+
+    public void plotNode(Graphics2D g2, int loc, Color c, int size) {
         double lat = na.getLatitude(loc);
         double lon = na.getLongitude(loc);
         if (lat < bounds.minLat || lat > bounds.maxLat || lon < bounds.minLon || lon > bounds.maxLon) {
@@ -99,7 +132,7 @@ public class GraphicsWrapper {
 
         Color old = g2.getColor();
         g2.setColor(c);
-        plot(g2, lat, lon, 4);
+        plot(g2, lat, lon, size);
         g2.setColor(old);
     }
 
@@ -109,7 +142,7 @@ public class GraphicsWrapper {
         g2.fillOval((int) x, (int) y, width, width);
     }
 
-    void scale(int x, int y, boolean zoomIn) {
+    public void scale(int x, int y, boolean zoomIn) {
         double tmpFactor = 0.5f;
         if (!zoomIn) {
             tmpFactor = 2;

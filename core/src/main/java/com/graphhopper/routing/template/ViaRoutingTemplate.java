@@ -64,12 +64,12 @@ public class ViaRoutingTemplate extends AbstractRoutingTemplate implements Routi
         for (int placeIndex = 0; placeIndex < points.size(); placeIndex++) {
             GHPoint point = points.get(placeIndex);
             QueryResult res;
-            if(ghRequest.hasPointHints()){
-                res = locationIndex.findClosest(point.lat, point.lon, new NameSimilarityEdgeFilter(edgeFilter, ghRequest.getPointHint(placeIndex)));
-                if(!res.isValid()){
+            if (ghRequest.hasPointHints()) {
+                res = locationIndex.findClosest(point.lat, point.lon, new NameSimilarityEdgeFilter(edgeFilter, ghRequest.getPointHints().get(placeIndex)));
+                if (!res.isValid()) {
                     res = locationIndex.findClosest(point.lat, point.lon, edgeFilter);
                 }
-            }else{
+            } else {
                 res = locationIndex.findClosest(point.lat, point.lon, edgeFilter);
             }
             if (!res.isValid())
@@ -98,7 +98,7 @@ public class ViaRoutingTemplate extends AbstractRoutingTemplate implements Routi
                 Path prevRoute = pathList.get(placeIndex - 2);
                 if (prevRoute.getEdgeCount() > 0) {
                     EdgeIteratorState incomingVirtualEdge = prevRoute.getFinalEdge();
-                    queryGraph.enforceHeadingByEdgeId(fromQResult.getClosestNode(), incomingVirtualEdge.getEdge(), false);
+                    queryGraph.unfavorVirtualEdgePair(fromQResult.getClosestNode(), incomingVirtualEdge.getEdge());
                 }
             }
 
@@ -117,12 +117,14 @@ public class ViaRoutingTemplate extends AbstractRoutingTemplate implements Routi
             if (tmpPathList.isEmpty())
                 throw new IllegalStateException("At least one path has to be returned for " + fromQResult + " -> " + toQResult);
 
+            int idx = 0;
             for (Path path : tmpPathList) {
                 if (path.getTime() < 0)
-                    throw new RuntimeException("Time was negative. Please report as bug and include:" + ghRequest);
+                    throw new RuntimeException("Time was negative " + path.getTime() + " for index " + idx + ". Please report as bug and include:" + ghRequest);
 
                 pathList.add(path);
                 debug += ", " + path.getDebugInfo();
+                idx++;
             }
 
             altResponse.addDebugInfo(debug);

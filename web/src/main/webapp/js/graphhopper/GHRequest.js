@@ -30,7 +30,6 @@ if (!Function.prototype.bind) {
 
 var GHRequest = function (host, api_key) {
     this.host = host;
-    this.key = api_key;
     this.route = new GHRoute(new GHInput(), new GHInput());
     this.from = this.route.first();
     this.to = this.route.last();
@@ -41,7 +40,7 @@ var GHRequest = function (host, api_key) {
     this.useMiles = false;
     // use jsonp here if host allows CORS
     this.dataType = "json";
-    this.api_params = {"locale": "en", "vehicle": "car", "weighting": "fastest", "elevation": false};
+    this.api_params = {"locale": "en", "vehicle": "car", "weighting": "fastest", "elevation": false, "key": api_key};
 
     // register events
     this.route.addListener('route.add', function (evt) {
@@ -121,6 +120,16 @@ GHRequest.prototype.init = function (params) {
     }
 };
 
+GHRequest.prototype.setEarliestDepartureTime = function (localdatetime) {
+    this.api_params.earliestDepartureTime = localdatetime;
+};
+
+GHRequest.prototype.getEarliestDepartureTime = function () {
+    if (this.api_params.earliestDepartureTime)
+        return this.api_params.earliestDepartureTime;
+    return undefined;
+};
+
 GHRequest.prototype.initVehicle = function (vehicle) {
     this.api_params.vehicle = vehicle;
     var featureSet = this.features[vehicle];
@@ -139,12 +148,16 @@ GHRequest.prototype.getVehicle = function () {
     return this.api_params.vehicle;
 };
 
+GHRequest.prototype.isPublicTransit = function () {
+    return this.getVehicle() === "pt";
+};
+
 GHRequest.prototype.createGeocodeURL = function (host, prevIndex) {
     var tmpHost = this.host;
     if (host)
         tmpHost = host;
 
-    var path = this.createPath(tmpHost + "/geocode?limit=6&type=" + this.dataType + "&key=" + this.key);
+    var path = this.createPath(tmpHost + "/geocode?limit=6&type=" + this.dataType);
     if (prevIndex >= 0 && prevIndex < this.route.size()) {
         var point = this.route.getIndex(prevIndex);
         if (point.isResolved()) {
@@ -155,15 +168,16 @@ GHRequest.prototype.createGeocodeURL = function (host, prevIndex) {
 };
 
 GHRequest.prototype.createURL = function () {
-    return this.createPath(this.host + "/route?" + this.createPointParams(false) + "&type=" + this.dataType + "&key=" + this.key);
+    return this.createPath(this.host + "/route?" + this.createPointParams(false) + "&type=" + this.dataType);
 };
 
 GHRequest.prototype.createGPXURL = function (withRoute, withTrack, withWayPoints) {
-    return this.createPath(this.host + "/route?" + this.createPointParams(false) + "&type=gpx&key=" + this.key + "&gpx.route=" + withRoute + "&gpx.track=" + withTrack + "&gpx.waypoints=" + withWayPoints);
+    return this.createPath(this.host + "/route?" + this.createPointParams(false) + "&type=gpx&gpx.route=" + withRoute + "&gpx.track=" + withTrack + "&gpx.waypoints=" + withWayPoints);
 };
 
 GHRequest.prototype.createHistoryURL = function () {
-    return this.createPath("?" + this.createPointParams(true)) + "&use_miles=" + !!this.useMiles;
+    var skip = {"key": true};
+    return this.createPath("?" + this.createPointParams(true), skip) + "&use_miles=" + !!this.useMiles;
 };
 
 GHRequest.prototype.createPointParams = function (useRawInput) {
@@ -181,9 +195,12 @@ GHRequest.prototype.createPointParams = function (useRawInput) {
     return (str);
 };
 
-GHRequest.prototype.createPath = function (url) {
+GHRequest.prototype.createPath = function (url, skipParameters) {
     for (var key in this.api_params) {
         var val = this.api_params[key];
+        if(skipParameters && skipParameters[key])
+            continue;
+
         if (GHRoute.isArray(val)) {
             for (var keyIndex in val) {
                 url += "&" + encodeURIComponent(key) + "=" + encodeURIComponent(val[keyIndex]);
@@ -249,7 +266,7 @@ GHRequest.prototype.doRequest = function (url, callback) {
 };
 
 GHRequest.prototype.getInfo = function () {
-    var url = this.host + "/info?type=" + this.dataType + "&key=" + this.key;
+    var url = this.host + "/info?type=" + this.dataType + "&key=" + this.getKey();
     // console.log(url);
     return $.ajax({
         url: url,
@@ -265,11 +282,15 @@ GHRequest.prototype.setLocale = function (locale) {
         this.api_params.locale = locale;
 };
 
+GHRequest.prototype.getKey = function() {
+    return this.api_params.key;
+};
+
 GHRequest.prototype.fetchTranslationMap = function (urlLocaleParam) {
     if (!urlLocaleParam)
         // let servlet figure out the locale from the Accept-Language header
         urlLocaleParam = "";
-    var url = this.host + "/i18n/" + urlLocaleParam + "?type=" + this.dataType + "&key=" + this.key;
+    var url = this.host + "/i18n/" + urlLocaleParam + "?type=" + this.dataType + "&key=" + this.getKey();
     // console.log(url);
     return $.ajax({
         url: url,

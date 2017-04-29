@@ -37,6 +37,9 @@ public class CarFlagEncoder extends AbstractFlagEncoder {
 
     // This value determines the maximal possible on roads with bad surfaces
     protected int badSurfaceSpeed;
+
+    // This value determines the speed for roads with access=destination
+    protected int destinationSpeed;
     /**
      * A map which associates string to speed. Get some impression:
      * http://www.itoworld.com/map/124#fullscreen
@@ -54,7 +57,7 @@ public class CarFlagEncoder extends AbstractFlagEncoder {
                 properties.getBool("turn_costs", false) ? 1 : 0);
         this.properties = properties;
         this.setBlockFords(properties.getBool("block_fords", true));
-        this.setBlockByDefault(properties.getBool("block_barriers", true));        
+        this.setBlockByDefault(properties.getBool("block_barriers", true));
     }
 
     public CarFlagEncoder(String propertiesStr) {
@@ -110,6 +113,8 @@ public class CarFlagEncoder extends AbstractFlagEncoder {
 
         // limit speed on bad surfaces to 30 km/h
         badSurfaceSpeed = 30;
+
+        destinationSpeed = 5;
 
         maxPossibleSpeed = 110;
 
@@ -267,6 +272,13 @@ public class CarFlagEncoder extends AbstractFlagEncoder {
             flags |= directionBitMask;
         }
 
+        for (String restriction : restrictions) {
+            if (way.hasTag(restriction, "destination")) {
+                // This is problematic as Speed != Time
+                flags = this.speedEncoder.setDoubleValue(flags, destinationSpeed);
+            }
+        }
+
         return flags;
     }
 
@@ -324,6 +336,7 @@ public class CarFlagEncoder extends AbstractFlagEncoder {
         else
             return "destination: " + str;
     }
+
     /**
      * @param way:   needed to retrieve tags
      * @param speed: speed guessed e.g. from the road type or other tags

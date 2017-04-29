@@ -39,7 +39,7 @@ import java.util.zip.ZipInputStream;
  *
  * @author Nop
  */
-public class OSMInputFile implements Sink, Closeable {
+public class OSMInputFile implements Sink, OSMInput {
     private final InputStream bis;
     private final BlockingQueue<ReaderElement> itemQueue;
     Thread pbfReaderThread;
@@ -54,7 +54,7 @@ public class OSMInputFile implements Sink, Closeable {
 
     public OSMInputFile(File file) throws IOException {
         bis = decode(file);
-        itemQueue = new LinkedBlockingQueue<ReaderElement>(50000);
+        itemQueue = new LinkedBlockingQueue<>(50_000);
     }
 
     public OSMInputFile open() throws XMLStreamException {
@@ -156,6 +156,7 @@ public class OSMInputFile implements Sink, Closeable {
         eof = false;
     }
 
+    @Override
     public ReaderElement getNext() throws XMLStreamException {
         if (eof)
             throw new IllegalStateException("EOF reached");
@@ -236,7 +237,7 @@ public class OSMInputFile implements Sink, Closeable {
     private void openPBFReader(InputStream stream) {
         hasIncomingData = true;
         if (workerThreads <= 0)
-            workerThreads = 2;
+            workerThreads = 1;
 
         PbfReader reader = new PbfReader(stream, this, workerThreads);
         pbfReaderThread = new Thread(reader, "PBF Reader");
@@ -251,9 +252,10 @@ public class OSMInputFile implements Sink, Closeable {
         } catch (InterruptedException ex) {
             throw new RuntimeException(ex);
         }
+    }
 
-        // throw exception if full
-        // itemQueue.add(item);
+    public int getUnprocessedElements() {
+        return itemQueue.size();
     }
 
     @Override

@@ -39,10 +39,6 @@ public class BBoxTest {
 
         assertEquals(51.1007, b.minLat, 1e-4);
         assertEquals(11.4607, b.maxLon, 1e-4);
-
-        // something about 141 = sqrt(2*100^2)
-//        System.out.println(c.calcDist(52, 10, 52.8993, 11.4607));
-//        System.out.println(c.calcDist(52, 10, 51.1007, 8.5393));
     }
 
     @Test
@@ -54,6 +50,14 @@ public class BBoxTest {
         Circle c = new Circle(10, 10, 120000);
         assertTrue(c.getBounds().contains(c));
         assertFalse(new BBox(8.9, 11.09, 8.9, 11.2).contains(c));
+    }
+
+    @Test
+    public void testGetCenter() {
+        BBox bBox = new BBox(0, 2, 0, 2);
+        GHPoint center = bBox.getCenter();
+        assertEquals(1, center.getLat(), .00001);
+        assertEquals(1, center.getLon(), .00001);
     }
 
     @Test
@@ -79,6 +83,20 @@ public class BBoxTest {
         // assertFalse(new BBox(6, 11, 11, 6).intersect(new BBox(5, 10, 12, 7)));
         // so, use bottom-right and top-left corner
         assertTrue(new BBox(6, 11, 6, 11).intersect(new BBox(7, 10, 5, 12)));
+    }
+
+    @Test
+    public void testCalculateIntersection() {
+
+        BBox b1 = new BBox(0, 2, 0, 1);
+        BBox b2 = new BBox(-1, 1, -1, 2);
+        BBox expected = new BBox(0, 1, 0, 1);
+
+        assertEquals(expected, b1.calculateIntersection(b2));
+
+        //No intersection
+        b2 = new BBox(100, 200, 100, 200);
+        assertNull(b1.calculateIntersection(b2));
     }
 
     @Test
@@ -120,5 +138,12 @@ public class BBoxTest {
                 return true;
             }
         });
+    }
+
+    @Test
+    public void testParseTwoPoints() {
+        assertEquals(new BBox(2, 4, 1, 3), BBox.parseTwoPoints("1,2,3,4"));
+        // stable parsing, i.e. if first point is in north or south it does not matter:
+        assertEquals(new BBox(2, 4, 1, 3), BBox.parseTwoPoints("3,2,1,4"));
     }
 }

@@ -43,8 +43,8 @@ public class NameIndex implements Storable<NameIndex> {
     }
 
     @Override
-    public NameIndex create(long cap) {
-        names.create(cap);
+    public NameIndex create(long initBytes) {
+        names.create(initBytes);
         return this;
     }
 
@@ -72,7 +72,7 @@ public class NameIndex implements Storable<NameIndex> {
         long oldPointer = bytePointer;
         names.ensureCapacity(bytePointer + 1 + bytes.length);
         byte[] sizeBytes = new byte[]{
-            (byte) bytes.length
+                (byte) bytes.length
         };
         names.setBytes(bytePointer, sizeBytes, sizeBytes.length);
         bytePointer++;

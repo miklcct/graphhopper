@@ -10,6 +10,8 @@ matrix:
       sudo: required
       dist: trusty
       group: edge
+  allow_failures:
+    - jdk: oraclejdk9
 
 env:
   global:
@@ -38,14 +40,14 @@ before_install:
          sudo apt-get -o Dpkg::Options::="--force-confnew" install -y oracle-java9-installer oracle-java9-set-default oracle-java9-unlimited-jce-policy;
          sudo update-java-alternatives -s java-9-oracle;
      fi
-   - if [ "$TRAVIS_JDK_VERSION" == oraclejdk9 ]; then
-         sudo rm /etc/mavenrc;
-     fi
+#   - if [ "$TRAVIS_JDK_VERSION" == oraclejdk9 ]; then
+#         sudo rm /etc/mavenrc;
+#     fi
 
 install: true
 
 script:
-  - mvn -DfailIfNoTests=false clean test verify -B
+  - mvn clean test verify -B
 
 after_success:
   # deploy snapshot artifacts to maven central

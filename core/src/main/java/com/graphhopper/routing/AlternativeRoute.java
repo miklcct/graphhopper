@@ -17,9 +17,14 @@
  */
 package com.graphhopper.routing;
 
+import com.carrotsearch.hppc.IntObjectMap;
+import com.carrotsearch.hppc.IntSet;
+import com.carrotsearch.hppc.predicates.IntObjectPredicate;
+import com.graphhopper.coll.GHIntHashSet;
+import com.graphhopper.coll.GHIntObjectHashMap;
 import com.graphhopper.routing.AStar.AStarEntry;
-import com.graphhopper.routing.util.FlagEncoder;
 import com.graphhopper.routing.util.TraversalMode;
+import com.graphhopper.routing.weighting.WeightApproximator;
 import com.graphhopper.routing.weighting.Weighting;
 import com.graphhopper.storage.Graph;
 import com.graphhopper.storage.SPTEntry;
@@ -27,22 +32,17 @@ import com.graphhopper.util.EdgeIterator;
 import com.graphhopper.util.EdgeIteratorState;
 import com.graphhopper.util.GHUtility;
 import com.graphhopper.util.Parameters;
-import gnu.trove.map.TIntObjectMap;
-import gnu.trove.map.hash.TIntObjectHashMap;
-import gnu.trove.procedure.TIntObjectProcedure;
-import gnu.trove.procedure.TObjectProcedure;
-import gnu.trove.set.TIntSet;
-import gnu.trove.set.hash.TIntHashSet;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * This class implements the alternative paths search using the "plateau" and partially the
- * "penalty" method discribed in the following papers.
+ * "penalty" method described in the following papers.
  * <p>
  * <ul>
  * <li>Choice Routing Explanation - Camvit 2009:
@@ -68,7 +68,6 @@ public class AlternativeRoute implements RoutingAlgorithm {
         }
     };
     private final Graph graph;
-    private final FlagEncoder flagEncoder;
     private final Weighting weighting;
     private final TraversalMode traversalMode;
     private int visitedNodes;
@@ -80,12 +79,19 @@ public class AlternativeRoute implements RoutingAlgorithm {
     private double maxShareFactor = 0.6;
     private double minPlateauFactor = 0.2;
     private int maxPaths = 2;
+    private WeightApproximator weightApproximator;
 
     public AlternativeRoute(Graph graph, Weighting weighting, TraversalMode traversalMode) {
         this.graph = graph;
-        this.flagEncoder = weighting.getFlagEncoder();
         this.weighting = weighting;
         this.traversalMode = traversalMode;
+    }
+
+    /**
+     * This method sets the approximation used for the internal bidirectional A*.
+     */
+    public void setApproximation(WeightApproximator weightApproximator) {
+        this.weightApproximator = weightApproximator;
     }
 
     static List<String> getAltNames(Graph graph, SPTEntry ee) {
@@ -139,10 +145,9 @@ public class AlternativeRoute implements RoutingAlgorithm {
     }
 
     /**
-     * This method sets the graph exploration percentage for alternative paths. Default is 1 (100%).
-     * Specify a higher value to get more alternatives (especially if maxWeightFactor is higher than
-     * 1.5) and a lower value to improve query time but reduces the possibility to find
-     * alternatives.
+     * This method sets the graph exploration percentage for alternative paths. Default for bidirectional A*
+     * is 0.8 (80%). Specify a higher value to get more alternatives (especially if maxWeightFactor is higher than
+     * 1.5) and a lower value to improve query time but reduces the possibility to find alternatives.
      */
     public void setMaxExplorationFactor(double explorationFactor) {
         this.maxExplorationFactor = explorationFactor;
@@ -166,6 +171,10 @@ public class AlternativeRoute implements RoutingAlgorithm {
         AlternativeBidirSearch altBidirDijktra = new AlternativeBidirSearch(
                 graph, weighting, traversalMode, maxExplorationFactor * 2);
         altBidirDijktra.setMaxVisitedNodes(maxVisitedNodes);
+        if (weightApproximator != null) {
+            altBidirDijktra.setApproximation(weightApproximator);
+        }
+
         altBidirDijktra.searchBest(from, to);
         visitedNodes = altBidirDijktra.getVisitedNodes();
 
@@ -256,11 +265,11 @@ public class AlternativeRoute implements RoutingAlgorithm {
             this.explorationFactor = explorationFactor;
         }
 
-        public TIntObjectMap<AStarEntry> getBestWeightMapFrom() {
+        public IntObjectMap<AStarEntry> getBestWeightMapFrom() {
             return bestWeightMapFrom;
         }
 
-        public TIntObjectMap<AStarEntry> getBestWeightMapTo() {
+        public IntObjectMap<AStarEntry> getBestWeightMapTo() {
             return bestWeightMapTo;
         }
 
@@ -302,7 +311,7 @@ public class AlternativeRoute implements RoutingAlgorithm {
                                                       final double maxShareFactor, final double shareInfluence,
                                                       final double minPlateauFactor, final double plateauInfluence) {
             final double maxWeight = maxWeightFactor * bestPath.getWeight();
-            final TIntObjectHashMap<TIntSet> traversalIDMap = new TIntObjectHashMap<TIntSet>();
+            final GHIntObjectHashMap<IntSet> traversalIDMap = new GHIntObjectHashMap<IntSet>();
             final AtomicInteger startTID = addToMap(traversalIDMap, bestPath);
 
             // find all 'good' alternatives from forward-SPT matching the backward-SPT and optimize by
@@ -321,9 +330,9 @@ public class AlternativeRoute implements RoutingAlgorithm {
             alternatives.add(bestAlt);
             final List<SPTEntry> bestPathEntries = new ArrayList<SPTEntry>(2);
 
-            bestWeightMapFrom.forEachEntry(new TIntObjectProcedure<SPTEntry>() {
+            bestWeightMapFrom.forEach(new IntObjectPredicate<SPTEntry>() {
                 @Override
-                public boolean execute(final int traversalId, final SPTEntry fromSPTEntry) {
+                public boolean apply(final int traversalId, final SPTEntry fromSPTEntry) {
                     SPTEntry toSPTEntry = bestWeightMapTo.get(traversalId);
                     if (toSPTEntry == null)
                         return true;
@@ -466,12 +475,19 @@ public class AlternativeRoute implements RoutingAlgorithm {
                  * traversalIDMap
                  */
                 boolean isAlreadyExisting(final int tid) {
-                    return !traversalIDMap.forEachValue(new TObjectProcedure<TIntSet>() {
+                    final AtomicBoolean exists = new AtomicBoolean(false);
+                    traversalIDMap.forEach(new IntObjectPredicate<IntSet>() {
                         @Override
-                        public boolean execute(TIntSet set) {
-                            return !set.contains(tid);
+                        public boolean apply(int key, IntSet set) {
+                            if (set.contains(tid)) {
+                                exists.set(true);
+                                return false;
+                            }
+                            return true;
                         }
                     });
+
+                    return exists.get();
                 }
 
                 /**
@@ -515,8 +531,8 @@ public class AlternativeRoute implements RoutingAlgorithm {
         /**
          * This method adds the traversal IDs of the specified path as set to the specified map.
          */
-        AtomicInteger addToMap(TIntObjectHashMap<TIntSet> map, Path path) {
-            TIntSet set = new TIntHashSet();
+        AtomicInteger addToMap(GHIntObjectHashMap<IntSet> map, Path path) {
+            IntSet set = new GHIntHashSet();
             final AtomicInteger startTID = new AtomicInteger(-1);
             for (EdgeIteratorState iterState : path.calcEdges()) {
                 int tid = traversalMode.createTraversalId(iterState, false);

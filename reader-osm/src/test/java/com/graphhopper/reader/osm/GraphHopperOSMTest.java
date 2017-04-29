@@ -17,6 +17,7 @@
  */
 package com.graphhopper.reader.osm;
 
+import com.carrotsearch.hppc.IntArrayList;
 import com.graphhopper.GHRequest;
 import com.graphhopper.GHResponse;
 import com.graphhopper.GraphHopper;
@@ -25,6 +26,8 @@ import com.graphhopper.reader.DataReader;
 import com.graphhopper.routing.*;
 import com.graphhopper.routing.ch.CHAlgoFactoryDecorator;
 import com.graphhopper.routing.ch.PrepareContractionHierarchies;
+import com.graphhopper.routing.lm.LandmarkStorage;
+import com.graphhopper.routing.lm.PrepareLandmarks;
 import com.graphhopper.routing.util.*;
 import com.graphhopper.routing.weighting.AbstractWeighting;
 import com.graphhopper.routing.weighting.FastestWeighting;
@@ -33,6 +36,7 @@ import com.graphhopper.storage.*;
 import com.graphhopper.util.CmdArgs;
 import com.graphhopper.util.Helper;
 import com.graphhopper.util.Instruction;
+import com.graphhopper.util.Parameters;
 import com.graphhopper.util.Parameters.Routing;
 import com.graphhopper.util.shapes.GHPoint;
 import org.junit.After;
@@ -140,7 +144,7 @@ public class GraphHopperOSMTest {
         gh = new GraphHopperOSM().
                 setGraphHopperLocation(ghLoc).
                 setDataReaderFile(testOsm).
-                init(new CmdArgs().put("graph.flag_encoders", "car").put("prepare.ch.weightings", "no"));
+                init(new CmdArgs().put("graph.flag_encoders", "car").put(Parameters.CH.PREPARE + "weightings", "no"));
 
         assertFalse(gh.getAlgorithmFactory(new HintsMap("fastest")) instanceof PrepareContractionHierarchies);
         gh.close();
@@ -362,10 +366,10 @@ public class GraphHopperOSMTest {
     public void testFailsForWrongConfig() throws IOException {
         instance = new GraphHopperOSM().init(
                 new CmdArgs().
-                put("datareader.file", testOsm3).
-                put("datareader.dataaccess", "RAM").
-                put("graph.flag_encoders", "foot,car").
-                put("prepare.ch.weightings", "no")).
+                        put("datareader.file", testOsm3).
+                        put("datareader.dataaccess", "RAM").
+                        put("graph.flag_encoders", "foot,car").
+                        put(Parameters.CH.PREPARE + "weightings", "no")).
                 setGraphHopperLocation(ghLoc);
         instance.importOrLoad();
         assertEquals(5, instance.getGraphHopperStorage().getNodes());
@@ -375,10 +379,10 @@ public class GraphHopperOSMTest {
         try {
             GraphHopper tmpGH = new GraphHopperOSM().init(
                     new CmdArgs().
-                    put("datareader.file", testOsm3).
-                    put("datareader.dataaccess", "RAM").
-                    put("graph.flag_encoders", "foot").
-                    put("prepare.ch.weightings", "no")).
+                            put("datareader.file", testOsm3).
+                            put("datareader.dataaccess", "RAM").
+                            put("graph.flag_encoders", "foot").
+                            put(Parameters.CH.PREPARE + "weightings", "no")).
                     setDataReaderFile(testOsm3);
             tmpGH.load(ghLoc);
             assertTrue(false);
@@ -389,11 +393,11 @@ public class GraphHopperOSMTest {
         // different bytesForFlags should fail to load
         instance = new GraphHopperOSM().init(
                 new CmdArgs().
-                put("datareader.file", testOsm3).
-                put("datareader.dataaccess", "RAM").
-                put("graph.flag_encoders", "foot,car").
-                put("graph.bytes_for_flags", 8).
-                put("prepare.ch.weightings", "no")).
+                        put("datareader.file", testOsm3).
+                        put("datareader.dataaccess", "RAM").
+                        put("graph.flag_encoders", "foot,car").
+                        put("graph.bytes_for_flags", 8).
+                        put(Parameters.CH.PREPARE + "weightings", "no")).
                 setDataReaderFile(testOsm3);
         try {
             instance.load(ghLoc);
@@ -407,7 +411,7 @@ public class GraphHopperOSMTest {
             GraphHopper tmpGH = new GraphHopperOSM().init(new CmdArgs().
                     put("datareader.file", testOsm3).
                     put("datareader.dataaccess", "RAM").
-                    put("prepare.ch.weightings", "no").
+                    put(Parameters.CH.PREPARE + "weightings", "no").
                     put("graph.flag_encoders", "car,foot")).
                     setDataReaderFile(testOsm3);
             tmpGH.load(ghLoc);
@@ -616,7 +620,7 @@ public class GraphHopperOSMTest {
         GHResponse response = new GHResponse();
         List<Path> paths = instance.calcPaths(req, response);
         assertFalse(response.hasErrors());
-        assertArrayEquals(new int[]{10, 5, 6, 7, 11}, paths.get(0).calcNodes().toArray());
+        assertEquals(IntArrayList.from(9, 5, 6, 7, 11), paths.get(0).calcNodes());
     }
 
     @Test
@@ -636,8 +640,8 @@ public class GraphHopperOSMTest {
         List<Path> paths = instance.calcPaths(req, response);
         assertFalse(response.hasErrors());
         assertEquals(1, response.getAll().size());
-        assertArrayEquals(new int[]{10, 4, 3, 11}, paths.get(0).calcNodes().toArray());
-        assertArrayEquals(new int[]{11, 8, 1, 2, 9}, paths.get(1).calcNodes().toArray());
+        assertEquals(IntArrayList.from(9, 4, 3, 10), paths.get(0).calcNodes());
+        assertEquals(IntArrayList.from(10, 8, 1, 2, 11), paths.get(1).calcNodes());
     }
 
     @Test
@@ -656,8 +660,8 @@ public class GraphHopperOSMTest {
         GHResponse response = new GHResponse();
         List<Path> paths = instance.calcPaths(req, response);
         assertFalse(response.hasErrors());
-        assertArrayEquals(new int[]{10, 4, 3, 8, 7, 9}, paths.get(0).calcNodes().toArray());
-        assertArrayEquals(new int[]{9, 6, 5, 10, 4, 3, 11}, paths.get(1).calcNodes().toArray());
+        assertEquals(IntArrayList.from(9, 4, 3, 8, 7, 11), paths.get(0).calcNodes());
+        assertEquals(IntArrayList.from(11, 6, 5, 9, 4, 3, 10), paths.get(1).calcNodes());
     }
 
     @Test
@@ -738,6 +742,10 @@ public class GraphHopperOSMTest {
         final RoutingAlgorithmFactory af = new RoutingAlgorithmFactorySimple();
         instance.addAlgorithmFactoryDecorator(new RoutingAlgorithmFactoryDecorator() {
             @Override
+            public void init(CmdArgs args) {
+            }
+
+            @Override
             public RoutingAlgorithmFactory getDecoratedAlgorithmFactory(RoutingAlgorithmFactory algoFactory, HintsMap map) {
                 return af;
             }
@@ -755,6 +763,9 @@ public class GraphHopperOSMTest {
         final AtomicInteger cnt = new AtomicInteger(0);
         instance.addAlgorithmFactoryDecorator(new RoutingAlgorithmFactoryDecorator() {
             @Override
+            public void init(CmdArgs args) {
+            }
+
             public RoutingAlgorithmFactory getDecoratedAlgorithmFactory(RoutingAlgorithmFactory algoFactory, HintsMap map) {
                 return new RoutingAlgorithmFactorySimple() {
                     @Override
@@ -783,10 +794,10 @@ public class GraphHopperOSMTest {
         // try all parallelization modes        
         for (int threadCount = 1; threadCount < 6; threadCount++) {
             EncodingManager em = new EncodingManager(Arrays.asList(new CarFlagEncoder(), new MotorcycleFlagEncoder(),
-                    new MountainBikeFlagEncoder(), new RacingBikeFlagEncoder(), new FootFlagEncoder()),
-                    8);
+                    new MountainBikeFlagEncoder(), new RacingBikeFlagEncoder(), new FootFlagEncoder()), 8);
 
-            GraphHopper tmpGH = new GraphHopperOSM().setStoreOnFlush(false).
+            GraphHopper tmpGH = new GraphHopperOSM().
+                    setStoreOnFlush(false).
                     setEncodingManager(em).
                     setGraphHopperLocation(ghLoc).
                     setDataReaderFile(testOsm);
@@ -806,11 +817,55 @@ public class GraphHopperOSMTest {
                 else
                     assertEquals((int) singleThreadShortcutCount, pch.getShortcuts());
 
-                String keyError = "prepare.error." + name;
+                String keyError = Parameters.CH.PREPARE + "error." + name;
                 String valueError = tmpGH.getGraphHopperStorage().getProperties().get(keyError);
                 assertTrue("Properties for " + name + " should NOT contain error " + valueError + " [" + threadCount + "]", valueError.isEmpty());
 
-                String key = "prepare.date." + name;
+                String key = Parameters.CH.PREPARE + "date." + name;
+                String value = tmpGH.getGraphHopperStorage().getProperties().get(key);
+                assertTrue("Properties for " + name + " did NOT contain finish date [" + threadCount + "]", !value.isEmpty());
+            }
+            tmpGH.close();
+        }
+    }
+
+    @Test
+    public void testMultipleLMPreparationsInParallel() {
+        HashMap<String, Integer> landmarkCount = new HashMap<String, Integer>();
+        // try all parallelization modes
+        for (int threadCount = 1; threadCount < 6; threadCount++) {
+            EncodingManager em = new EncodingManager(Arrays.asList(new CarFlagEncoder(), new MotorcycleFlagEncoder(),
+                    new MountainBikeFlagEncoder(), new RacingBikeFlagEncoder(), new FootFlagEncoder()), 8);
+
+            GraphHopper tmpGH = new GraphHopperOSM().
+                    setStoreOnFlush(false).
+                    setCHEnabled(false).
+                    setEncodingManager(em).
+                    setGraphHopperLocation(ghLoc).
+                    setDataReaderFile(testOsm);
+            tmpGH.getLMFactoryDecorator().
+                    addWeighting("fastest").
+                    setEnabled(true).
+                    setPreparationThreads(threadCount);
+
+            tmpGH.importOrLoad();
+
+            assertEquals(5, tmpGH.getLMFactoryDecorator().getPreparations().size());
+            for (PrepareLandmarks prepLM : tmpGH.getLMFactoryDecorator().getPreparations()) {
+                assertTrue("Preparation wasn't run! [" + threadCount + "]", prepLM.isPrepared());
+
+                String name = AbstractWeighting.weightingToFileName(prepLM.getWeighting());
+                Integer singleThreadShortcutCount = landmarkCount.get(name);
+                if (singleThreadShortcutCount == null)
+                    landmarkCount.put(name, prepLM.getSubnetworksWithLandmarks());
+                else
+                    assertEquals((int) singleThreadShortcutCount, prepLM.getSubnetworksWithLandmarks());
+
+                String keyError = Parameters.Landmark.PREPARE + "error." + name;
+                String valueError = tmpGH.getGraphHopperStorage().getProperties().get(keyError);
+                assertTrue("Properties for " + name + " should NOT contain error " + valueError + " [" + threadCount + "]", valueError.isEmpty());
+
+                String key = Parameters.Landmark.PREPARE + "date." + name;
                 String value = tmpGH.getGraphHopperStorage().getProperties().get(key);
                 assertTrue("Properties for " + name + " did NOT contain finish date [" + threadCount + "]", !value.isEmpty());
             }

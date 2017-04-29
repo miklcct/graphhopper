@@ -17,6 +17,7 @@
  */
 package com.graphhopper.storage.index;
 
+import com.graphhopper.coll.GHIntHashSet;
 import com.graphhopper.routing.util.*;
 import com.graphhopper.storage.Directory;
 import com.graphhopper.storage.Graph;
@@ -24,10 +25,12 @@ import com.graphhopper.storage.NodeAccess;
 import com.graphhopper.storage.RAMDirectory;
 import com.graphhopper.util.*;
 import com.graphhopper.util.shapes.GHPoint;
-import gnu.trove.set.hash.TIntHashSet;
 import org.junit.Test;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -118,10 +121,10 @@ public class LocationIndexTreeTest extends AbstractLocationIndexTester {
         // [LEAF 0 {2} {},    LEAF 2 {1} {},    LEAF 1 {2} {}, LEAF 3 {1} {}, LEAF 8 {0} {}, LEAF 10 {0} {}, LEAF 9 {0} {}, LEAF 4 {2} {}, LEAF 6 {0, 3} {},       LEAF 5 {0, 2, 3} {}, LEAF 7 {1, 2, 3} {}, LEAF 13 {1} {}]
         // System.out.println(inMemIndex.getLayer(2));
 
-        TIntHashSet set = new TIntHashSet();
+        GHIntHashSet set = new GHIntHashSet();
         set.add(0);
 
-        TIntHashSet foundIds = new TIntHashSet();
+        GHIntHashSet foundIds = new GHIntHashSet();
         index.findNetworkEntries(0.5, -0.5, foundIds, 0);
         assertEquals(set, foundIds);
 
@@ -178,10 +181,10 @@ public class LocationIndexTreeTest extends AbstractLocationIndexTester {
         // get only 0 or any node in the lefter greater subgraph.
         // The other subnetwork is already perfect {26}.
         // For compaction see: https://github.com/graphhopper/graphhopper/blob/5594f7f9d98d932f365557dc37b4b2d3b7abf698/core/src/main/java/com/graphhopper/storage/index/Location2NodesNtree.java#L277
-        TIntHashSet set = new TIntHashSet();
-        set.addAll(Arrays.asList(28, 27, 26, 24, 23, 21, 19, 18, 16, 14, 6, 5, 4, 3, 2, 1, 0));
+        GHIntHashSet set = new GHIntHashSet();
+        set.addAll(28, 27, 26, 24, 23, 21, 19, 18, 16, 14, 6, 5, 4, 3, 2, 1, 0);
 
-        TIntHashSet foundIds = new TIntHashSet();
+        GHIntHashSet foundIds = new GHIntHashSet();
         index.findNetworkEntries(49.950, 11.5732, foundIds, 0);
         assertEquals(set, foundIds);
     }
@@ -412,7 +415,7 @@ public class LocationIndexTreeTest extends AbstractLocationIndexTester {
 
         assertTrue((rmin2 - check2) < 0.0001);
 
-        TIntHashSet points = new TIntHashSet();
+        GHIntHashSet points = new GHIntHashSet();
         assertEquals(Double.MAX_VALUE, index.calcMinDistance(0.05, -0.3, points), 1e-1);
 
         points.add(0);
@@ -515,4 +518,56 @@ public class LocationIndexTreeTest extends AbstractLocationIndexTester {
             assertEquals(i, qr.getClosestNode());
         }
     }
+
+    // 0---1---2
+    // |   |   |
+    // |10 |   |
+    // | | |   |
+    // 3-9-4---5
+    // |   |   |
+    // 6---7---8
+    @Test
+    public void testFindNClosest() {
+        Graph graph = createGHStorage(new RAMDirectory(), encodingManager, false);
+        NodeAccess na = graph.getNodeAccess();
+        na.setNode(0, 0.0010, 0.0000);
+        na.setNode(1, 0.0010, 0.0005);
+        na.setNode(2, 0.0010, 0.0010);
+        na.setNode(3, 0.0005, 0.0000);
+        na.setNode(4, 0.0005, 0.0005);
+        na.setNode(5, 0.0005, 0.0010);
+        na.setNode(6, 0.0000, 0.0000);
+        na.setNode(7, 0.0000, 0.0005);
+        na.setNode(8, 0.0000, 0.0010);
+        na.setNode(9, 0.0005, 0.0002);
+        na.setNode(10, 0.0007, 0.0002);
+        graph.edge(0, 1);
+        graph.edge(1, 2);
+        graph.edge(0, 3);
+        graph.edge(1, 4);
+        graph.edge(2, 5);
+        graph.edge(3, 9);
+        graph.edge(9, 4);
+        EdgeIteratorState edge4_5 = graph.edge(4, 5);
+        graph.edge(10, 9);
+        graph.edge(3, 6);
+        EdgeIteratorState edge4_7 = graph.edge(4, 7);
+        graph.edge(5, 8);
+        graph.edge(6, 7);
+        graph.edge(7, 8);
+
+        LocationIndexTree index = createIndexNoPrepare(graph, 500);
+        index.prepareIndex();
+
+        // query node 4 => get at least 4-5, 4-7
+        List<QueryResult> result = index.findNClosest(0.0004, 0.0006, EdgeFilter.ALL_EDGES, 15);
+        List<Integer> ids = new ArrayList<Integer>();
+        for (QueryResult qr : result) {
+            ids.add(qr.getClosestEdge().getEdge());
+        }
+        Collections.sort(ids);
+        assertEquals("edge ids do not match",
+                Arrays.asList(edge4_5.getEdge(), edge4_7.getEdge()), ids);
+    }
+
 }

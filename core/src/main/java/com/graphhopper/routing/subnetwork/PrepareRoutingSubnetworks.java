@@ -17,15 +17,17 @@
  */
 package com.graphhopper.routing.subnetwork;
 
+import com.carrotsearch.hppc.IntArrayList;
+import com.carrotsearch.hppc.IntIndexedContainer;
 import com.graphhopper.coll.GHBitSet;
 import com.graphhopper.coll.GHBitSetImpl;
+import com.graphhopper.coll.GHIntArrayList;
 import com.graphhopper.routing.util.DefaultEdgeFilter;
 import com.graphhopper.routing.util.EdgeFilter;
 import com.graphhopper.routing.util.FlagEncoder;
 import com.graphhopper.storage.GraphHopperStorage;
+import com.graphhopper.storage.NodeAccess;
 import com.graphhopper.util.*;
-import gnu.trove.list.TIntList;
-import gnu.trove.list.array.TIntArrayList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -69,6 +71,7 @@ public class PrepareRoutingSubnetworks {
         if (minNetworkSize <= 0 && minOneWayNetworkSize <= 0)
             return;
 
+        logger.info("start finding subnetworks (min:" + minNetworkSize + ", min one way:" + minOneWayNetworkSize + ") " + Helper.getMemInfo());
         int unvisitedDeadEnds = 0;
         for (FlagEncoder encoder : encoders) {
             // mark edges for one vehicle as inaccessible
@@ -76,7 +79,7 @@ public class PrepareRoutingSubnetworks {
             if (minOneWayNetworkSize > 0)
                 unvisitedDeadEnds += removeDeadEndUnvisitedNetworks(filter);
 
-            List<TIntArrayList> components = findSubnetworks(filter);
+            List<IntArrayList> components = findSubnetworks(filter);
             keepLargeNetworks(filter, components);
             subnetworks = Math.max(components.size(), subnetworks);
             logger.info(components.size() + " subnetworks found for " + encoder + ", " + Helper.getMemInfo());
@@ -97,17 +100,17 @@ public class PrepareRoutingSubnetworks {
     /**
      * This method finds the double linked components according to the specified filter.
      */
-    List<TIntArrayList> findSubnetworks(PrepEdgeFilter filter) {
+    List<IntArrayList> findSubnetworks(PrepEdgeFilter filter) {
         final FlagEncoder encoder = filter.getEncoder();
         final EdgeExplorer explorer = ghStorage.createEdgeExplorer(filter);
         int locs = ghStorage.getNodes();
-        List<TIntArrayList> list = new ArrayList<TIntArrayList>(100);
+        List<IntArrayList> list = new ArrayList<IntArrayList>(100);
         final GHBitSet bs = new GHBitSetImpl(locs);
         for (int start = 0; start < locs; start++) {
             if (bs.contains(start))
                 continue;
 
-            final TIntArrayList intList = new TIntArrayList(20);
+            final IntArrayList intList = new IntArrayList(20);
             list.add(intList);
             new BreadthFirstSearch() {
                 int tmpCounter = 0;
@@ -145,16 +148,16 @@ public class PrepareRoutingSubnetworks {
     /**
      * Deletes all but the largest subnetworks.
      */
-    int keepLargeNetworks(PrepEdgeFilter filter, List<TIntArrayList> components) {
+    int keepLargeNetworks(PrepEdgeFilter filter, List<IntArrayList> components) {
         if (components.size() <= 1)
             return 0;
 
         int maxCount = -1;
-        TIntList oldComponent = null;
+        IntIndexedContainer oldComponent = null;
         int allRemoved = 0;
         FlagEncoder encoder = filter.getEncoder();
         EdgeExplorer explorer = ghStorage.createEdgeExplorer(filter);
-        for (TIntArrayList component : components) {
+        for (IntArrayList component : components) {
             if (maxCount < 0) {
                 maxCount = component.size();
                 oldComponent = component;
@@ -206,23 +209,9 @@ public class PrepareRoutingSubnetworks {
         StopWatch sw = new StopWatch(bothFilter.getEncoder() + " findComponents").start();
         final EdgeFilter outFilter = new DefaultEdgeFilter(bothFilter.getEncoder(), false, true);
 
-        // Very important special case for single entry components: we don't need them! See #520
-        // But they'll be created a lot for multiple vehicles as many nodes e.g. for foot are not accessible at all for car.
-        // We can ignore these single entry components as they are already set 'not accessible'
-        EdgeExplorer explorer = ghStorage.createEdgeExplorer(outFilter);
-        int nodes = ghStorage.getNodes();
-        GHBitSet ignoreSet = new GHBitSetImpl(ghStorage.getNodes());
-        for (int start = 0; start < nodes; start++) {
-            if (!ghStorage.isNodeRemoved(start)) {
-                EdgeIterator iter = explorer.setBaseNode(start);
-                if (!iter.next())
-                    ignoreSet.add(start);
-            }
-        }
-
         // partition graph into strongly connected components using Tarjan's algorithm        
-        TarjansSCCAlgorithm tarjan = new TarjansSCCAlgorithm(ghStorage, ignoreSet, outFilter);
-        List<TIntArrayList> components = tarjan.findComponents();
+        TarjansSCCAlgorithm tarjan = new TarjansSCCAlgorithm(ghStorage, outFilter, true);
+        List<IntArrayList> components = tarjan.findComponents();
         logger.info(sw.stop() + ", size:" + components.size());
 
         return removeEdges(bothFilter, components, minOneWayNetworkSize);
@@ -235,20 +224,20 @@ public class PrepareRoutingSubnetworks {
      *
      * @return number of removed edges
      */
-    int removeEdges(final PrepEdgeFilter bothFilter, List<TIntArrayList> components, int min) {
+    int removeEdges(final PrepEdgeFilter bothFilter, List<IntArrayList> components, int min) {
         // remove edges determined from nodes but only if less than minimum size
         FlagEncoder encoder = bothFilter.getEncoder();
         EdgeExplorer explorer = ghStorage.createEdgeExplorer(bothFilter);
         int removedEdges = 0;
-        for (TIntArrayList component : components) {
+        for (IntArrayList component : components) {
             removedEdges += removeEdges(explorer, encoder, component, min);
         }
         return removedEdges;
     }
 
-    int removeEdges(EdgeExplorer explorer, FlagEncoder encoder, TIntList component, int min) {
+    int removeEdges(EdgeExplorer explorer, FlagEncoder encoder, IntIndexedContainer component, int min) {
         int removedEdges = 0;
-        if (component.size() < min)
+        if (component.size() < min) {
             for (int i = 0; i < component.size(); i++) {
                 EdgeIterator edge = explorer.setBaseNode(component.get(i));
                 while (edge.next()) {
@@ -256,6 +245,7 @@ public class PrepareRoutingSubnetworks {
                     removedEdges++;
                 }
             }
+        }
 
         return removedEdges;
     }

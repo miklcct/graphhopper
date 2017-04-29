@@ -17,7 +17,11 @@
  */
 package com.graphhopper.storage.index;
 
+import com.carrotsearch.hppc.IntArrayList;
+import com.carrotsearch.hppc.cursors.IntCursor;
+import com.carrotsearch.hppc.predicates.IntPredicate;
 import com.graphhopper.coll.GHBitSet;
+import com.graphhopper.coll.GHIntHashSet;
 import com.graphhopper.coll.GHTBitSet;
 import com.graphhopper.geohash.SpatialKeyAlgo;
 import com.graphhopper.routing.util.EdgeFilter;
@@ -25,22 +29,23 @@ import com.graphhopper.storage.*;
 import com.graphhopper.util.*;
 import com.graphhopper.util.shapes.BBox;
 import com.graphhopper.util.shapes.GHPoint;
-import gnu.trove.iterator.TIntIterator;
-import gnu.trove.list.array.TIntArrayList;
-import gnu.trove.procedure.TIntProcedure;
-import gnu.trove.set.hash.TIntHashSet;
+
+import java.util.ArrayList;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Iterator;
 import java.util.List;
 
 /**
  * This implementation implements an n-tree to get the closest node or edge from GPS coordinates.
  * <p>
- * All leafs are at the same depth, otherwise it is quite complicated to calculate the bresenham
+ * All leafs are at the same depth, otherwise it is quite complicated to calculate the Bresenham
  * line for different resolutions, especially if a leaf node could be split into a tree-node and
  * resolution changes.
  * <p>
@@ -68,6 +73,12 @@ public class LocationIndexTree implements LocationIndex {
     private double deltaLon;
     private int initSizeLeafEntries = 4;
     private boolean initialized = false;
+    private static final Comparator<QueryResult> QR_COMPARATOR = new Comparator<QueryResult>() {
+        @Override
+        public int compare(QueryResult o1, QueryResult o2) {
+            return Double.compare(o1.getQueryDistance(), o2.getQueryDistance());
+        }
+    };
     /**
      * If normed distance is smaller than this value the node or edge is 'identical' and the
      * algorithm can stop search.
@@ -137,7 +148,7 @@ public class LocationIndexTree implements LocationIndex {
                 (bounds.maxLon - bounds.minLon) / 360 * preciseDistCalc.calcCircumference(lat));
         double tmp = maxDistInMeter / minResolutionInMeter;
         tmp = tmp * tmp;
-        TIntArrayList tmpEntries = new TIntArrayList();
+        IntArrayList tmpEntries = new IntArrayList();
         // the last one is always 4 to reduce costs if only a single entry
         tmp /= 4;
         while (tmp > 1) {
@@ -213,15 +224,6 @@ public class LocationIndexTree implements LocationIndex {
         InMemConstructionIndex memIndex = new InMemConstructionIndex(entries[0]);
         memIndex.prepare();
         return memIndex;
-    }
-
-    @Override
-    public int findID(double lat, double lon) {
-        QueryResult res = findClosest(lat, lon, EdgeFilter.ALL_EDGES);
-        if (!res.isValid())
-            return -1;
-
-        return res.getClosestNode();
     }
 
     @Override
@@ -336,12 +338,13 @@ public class LocationIndexTree implements LocationIndex {
         dataAccess.setSegmentSize(bytes);
     }
 
-    TIntArrayList getEntries() {
-        return new TIntArrayList(entries);
+    // just for test
+    IntArrayList getEntries() {
+        return IntArrayList.from(entries);
     }
 
     // fillIDs according to how they are stored
-    final void fillIDs(long keyPart, int intIndex, TIntHashSet set, int depth) {
+    final void fillIDs(long keyPart, int intIndex, GHIntHashSet set, int depth) {
         long pointer = (long) intIndex << 2;
         if (depth == entries.length) {
             int value = dataAccess.getInt(pointer);
@@ -426,11 +429,11 @@ public class LocationIndexTree implements LocationIndex {
     /**
      * Provide info about tilesize for testing / visualization
      */
-    double getDeltaLat() {
+    public double getDeltaLat() {
         return deltaLat;
     }
 
-    double getDeltaLon() {
+    public double getDeltaLon() {
         return deltaLon;
     }
 
@@ -452,7 +455,7 @@ public class LocationIndexTree implements LocationIndex {
      * iteration is necessary and no early finish possible.
      */
     public final boolean findNetworkEntries(double queryLat, double queryLon,
-                                            TIntHashSet foundEntries, int iteration) {
+                                            GHIntHashSet foundEntries, int iteration) {
         // find entries in border of searchbox
         for (int yreg = -iteration; yreg <= iteration; yreg++) {
             double subqueryLat = queryLat + yreg * deltaLat;
@@ -492,11 +495,11 @@ public class LocationIndexTree implements LocationIndex {
         return false;
     }
 
-    final double calcMinDistance(double queryLat, double queryLon, TIntHashSet pointset) {
+    final double calcMinDistance(double queryLat, double queryLon, GHIntHashSet pointset) {
         double min = Double.MAX_VALUE;
-        TIntIterator itr = pointset.iterator();
+        Iterator<IntCursor> itr = pointset.iterator();
         while (itr.hasNext()) {
-            int node = itr.next();
+            int node = itr.next().value;
             double lat = nodeAccess.getLat(node);
             double lon = nodeAccess.getLon(node);
             double dist = distCalc.calcDist(queryLat, queryLon, lat, lon);
@@ -507,7 +510,7 @@ public class LocationIndexTree implements LocationIndex {
         return min;
     }
 
-    final void findNetworkEntriesSingleRegion(TIntHashSet storedNetworkEntryIds, double queryLat, double queryLon) {
+    public final void findNetworkEntriesSingleRegion(GHIntHashSet storedNetworkEntryIds, double queryLat, double queryLon) {
         long keyPart = createReverseKey(queryLat, queryLon);
         fillIDs(keyPart, START_POINTER, storedNetworkEntryIds, 0);
     }
@@ -517,21 +520,21 @@ public class LocationIndexTree implements LocationIndex {
         if (isClosed())
             throw new IllegalStateException("You need to create a new LocationIndex instance as it is already closed");
 
-        TIntHashSet allCollectedEntryIds = new TIntHashSet();
+        GHIntHashSet allCollectedEntryIds = new GHIntHashSet();
         final QueryResult closestMatch = new QueryResult(queryLat, queryLon);
         for (int iteration = 0; iteration < maxRegionSearch; iteration++) {
-            TIntHashSet storedNetworkEntryIds = new TIntHashSet();
+            GHIntHashSet storedNetworkEntryIds = new GHIntHashSet();
             boolean earlyFinish = findNetworkEntries(queryLat, queryLon, storedNetworkEntryIds, iteration);
             storedNetworkEntryIds.removeAll(allCollectedEntryIds);
             allCollectedEntryIds.addAll(storedNetworkEntryIds);
 
             // clone storedIds to avoid interference with forEach
-            final GHBitSet checkBitset = new GHTBitSet(new TIntHashSet(storedNetworkEntryIds));
+            final GHBitSet checkBitset = new GHTBitSet(new GHIntHashSet(storedNetworkEntryIds));
             // find nodes from the network entries which are close to 'point'
             final EdgeExplorer explorer = graph.createEdgeExplorer();
-            storedNetworkEntryIds.forEach(new TIntProcedure() {
+            storedNetworkEntryIds.forEach(new IntPredicate() {
                 @Override
-                public boolean execute(int networkEntryNodeId) {
+                public boolean apply(int networkEntryNodeId) {
                     new XFirstSearchCheck(queryLat, queryLon, checkBitset, edgeFilter) {
                         @Override
                         protected double getQueryDistance() {
@@ -568,7 +571,120 @@ public class LocationIndexTree implements LocationIndex {
 
         return closestMatch;
     }
+    
+    /**
+     * Returns all edges that are within the specified radius around the queried position.
+     * Searches at most 9 cells to avoid performance problems. Hence, if the radius is larger than
+     * the cell width then not all edges might be returned.
+     * 
+     * TODO: either clarify the method name and description (to only search e.g. 9 tiles) or 
+     * refactor so it can handle a radius larger than 9 tiles. Also remove reference to 'NClosest',
+     * which is misleading, and don't always return at least one value. See map-matching #65.
+     * TODO: tidy up logic - see comments in graphhopper #994.
+     *
+     * @param radius in meters
+     */
+    public List<QueryResult> findNClosest(final double queryLat, final double queryLon,
+            final EdgeFilter edgeFilter, double radius) {
+        // Return ALL results which are very close and e.g. within the GPS signal accuracy.
+        // Also important to get all edges if GPS point is close to a junction.
+        final double returnAllResultsWithin = distCalc.calcNormalizedDist(radius);
 
+        // implement a cheap priority queue via List, sublist and Collections.sort
+        final List<QueryResult> queryResults = new ArrayList<QueryResult>();
+        GHIntHashSet set = new GHIntHashSet();
+
+        // Doing 2 iterations means searching 9 tiles.
+        for (int iteration = 0; iteration < 2; iteration++) {
+            // should we use the return value of earlyFinish?
+            findNetworkEntries(queryLat, queryLon, set, iteration);
+
+            final GHBitSet exploredNodes = new GHTBitSet(new GHIntHashSet(set));
+            final EdgeExplorer explorer = graph.createEdgeExplorer(edgeFilter);
+
+            set.forEach(new IntPredicate() {
+
+                @Override
+                public boolean apply(int node) {
+                    new XFirstSearchCheck(queryLat, queryLon, exploredNodes, edgeFilter) {
+                        @Override
+                        protected double getQueryDistance() {
+                            // do not skip search if distance is 0 or near zero (equalNormedDelta)
+                            return Double.MAX_VALUE;
+                        }
+
+                        @Override
+                        protected boolean check(int node, double normedDist, int wayIndex, EdgeIteratorState edge, QueryResult.Position pos) {
+                            if (normedDist < returnAllResultsWithin
+                                    || queryResults.isEmpty()
+                                    || queryResults.get(0).getQueryDistance() > normedDist) {
+                                // TODO: refactor below:
+                                // - should only add edges within search radius (below allows the
+                                // returning of a candidate outside search radius if it's the only
+                                // one). Removing this test would simplify it a lot and probably
+                                // match the expected behaviour (see method description)
+                                // - create QueryResult first and the add/set as required - clean up
+                                // the index tracking business.
+
+                                int index = -1;
+                                for (int qrIndex = 0; qrIndex < queryResults.size(); qrIndex++) {
+                                    QueryResult qr = queryResults.get(qrIndex);
+                                    // overwrite older queryResults which are potentially more far away than returnAllResultsWithin
+                                    if (qr.getQueryDistance() > returnAllResultsWithin) {
+                                        index = qrIndex;
+                                        break;
+                                    }
+
+                                    // avoid duplicate edges
+                                    if (qr.getClosestEdge().getEdge() == edge.getEdge()) {
+                                        if (qr.getQueryDistance() < normedDist) {
+                                            // do not add current edge
+                                            return true;
+                                        } else {
+                                            // overwrite old edge with current
+                                            index = qrIndex;
+                                            break;
+                                        }
+                                    }
+                                }
+
+                                QueryResult qr = new QueryResult(queryLat, queryLon);
+                                qr.setQueryDistance(normedDist);
+                                qr.setClosestNode(node);
+                                qr.setClosestEdge(edge.detach(false));
+                                qr.setWayIndex(wayIndex);
+                                qr.setSnappedPosition(pos);
+
+                                if (index < 0) {
+                                    queryResults.add(qr);
+                                } else {
+                                    queryResults.set(index, qr);
+                                }
+                            }
+                            return true;
+                        }
+                    }.start(explorer, node);
+                    return true;
+                }
+            });
+        }
+
+        // TODO: pass boolean argument for whether or not to sort? Can be expensive if not required.
+        Collections.sort(queryResults, QR_COMPARATOR);
+
+        for (QueryResult qr : queryResults) {
+            if (qr.isValid()) {
+                // denormalize distance
+                qr.setQueryDistance(distCalc.calcDenormalizedDist(qr.getQueryDistance()));
+                qr.calcSnappedPoint(distCalc);
+            } else {
+                throw new IllegalStateException("Invalid QueryResult should not happen here: " + qr);
+            }
+        }
+
+        return queryResults;
+    }
+    
     // make entries static as otherwise we get an additional reference to this class (memory waste)
     interface InMemEntry {
         boolean isLeaf();
@@ -596,13 +712,13 @@ public class LocationIndexTree implements LocationIndex {
             return "LEAF " + /*key +*/ " " + super.toString();
         }
 
-        TIntArrayList getResults() {
+        IntArrayList getResults() {
             return this;
         }
     }
 
     // Space efficient sorted integer set. Suited for only a few entries.
-    static class SortedIntSet extends TIntArrayList {
+    static class SortedIntSet extends IntArrayList {
         public SortedIntSet() {
         }
 
@@ -614,7 +730,7 @@ public class LocationIndexTree implements LocationIndex {
          * Allow adding a value only once
          */
         public boolean addOnce(int value) {
-            int foundIndex = binarySearch(value);
+            int foundIndex = Arrays.binarySearch(buffer, 0, size(), value);
             if (foundIndex >= 0) {
                 return false;
             }
@@ -769,7 +885,7 @@ public class LocationIndexTree implements LocationIndex {
                 int bits = keyAlgo.getBits();
                 // print reverse keys
                 sb.append(BitUtil.BIG.toBitString(BitUtil.BIG.reverse(key, bits), bits)).append("  ");
-                TIntArrayList entries = leaf.getResults();
+                IntArrayList entries = leaf.getResults();
                 for (int i = 0; i < entries.size(); i++) {
                     sb.append(leaf.get(i)).append(',');
                 }
@@ -791,7 +907,7 @@ public class LocationIndexTree implements LocationIndex {
             long refPointer = (long) intIndex * 4;
             if (entry.isLeaf()) {
                 InMemLeafEntry leaf = ((InMemLeafEntry) entry);
-                TIntArrayList entries = leaf.getResults();
+                IntArrayList entries = leaf.getResults();
                 int len = entries.size();
                 if (len == 0) {
                     return intIndex;

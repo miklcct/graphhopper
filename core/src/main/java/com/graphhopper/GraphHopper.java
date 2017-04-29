@@ -17,15 +17,13 @@
  */
 package com.graphhopper;
 
+import com.graphhopper.json.geo.JsonFeature;
 import com.graphhopper.reader.DataReader;
-import com.graphhopper.reader.dem.BridgeElevationInterpolator;
-import com.graphhopper.reader.dem.CGIARProvider;
-import com.graphhopper.reader.dem.ElevationProvider;
-import com.graphhopper.reader.dem.SRTMProvider;
-import com.graphhopper.reader.dem.TunnelElevationInterpolator;
+import com.graphhopper.reader.dem.*;
 import com.graphhopper.routing.*;
 import com.graphhopper.routing.ch.CHAlgoFactoryDecorator;
 import com.graphhopper.routing.ch.PrepareContractionHierarchies;
+import com.graphhopper.routing.lm.LMAlgoFactoryDecorator;
 import com.graphhopper.routing.subnetwork.PrepareRoutingSubnetworks;
 import com.graphhopper.routing.template.AlternativeRoutingTemplate;
 import com.graphhopper.routing.template.RoundTripRoutingTemplate;
@@ -34,11 +32,14 @@ import com.graphhopper.routing.template.ViaRoutingTemplate;
 import com.graphhopper.routing.util.*;
 import com.graphhopper.routing.weighting.*;
 import com.graphhopper.storage.*;
+import com.graphhopper.storage.change.ChangeGraphHelper;
+import com.graphhopper.storage.change.ChangeGraphResponse;
 import com.graphhopper.storage.index.LocationIndex;
 import com.graphhopper.storage.index.LocationIndexTree;
 import com.graphhopper.storage.index.QueryResult;
 import com.graphhopper.util.*;
 import com.graphhopper.util.Parameters.CH;
+import com.graphhopper.util.Parameters.Landmark;
 import com.graphhopper.util.Parameters.Routing;
 import com.graphhopper.util.exceptions.PointDistanceExceededException;
 import com.graphhopper.util.exceptions.PointOutOfBoundsException;
@@ -51,6 +52,9 @@ import java.io.File;
 import java.io.IOException;
 import java.text.DateFormat;
 import java.util.*;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import static com.graphhopper.util.Parameters.Algorithms.*;
 
@@ -64,8 +68,6 @@ public class GraphHopper implements GraphHopperAPI {
     private final Logger logger = LoggerFactory.getLogger(getClass());
     private final String fileLockName = "gh.lock";
     private final Set<RoutingAlgorithmFactoryDecorator> algoDecorators = new LinkedHashSet<>();
-    // for CH prepare
-    private final CHAlgoFactoryDecorator chFactoryDecorator = new CHAlgoFactoryDecorator();
     // utils
     private final TranslationMap trMap = new TranslationMap().doImport();
     boolean removeZipped = true;
@@ -87,6 +89,7 @@ public class GraphHopper implements GraphHopperAPI {
     private boolean simplifyResponse = true;
     private TraversalMode traversalMode = TraversalMode.NODE_BASED;
     private int maxVisitedNodes = Integer.MAX_VALUE;
+    private String blockedRectangularAreas = "";
 
     private int nonChMaxWaypointDistance = Integer.MAX_VALUE;
     // for index
@@ -96,17 +99,29 @@ public class GraphHopper implements GraphHopperAPI {
     // for prepare
     private int minNetworkSize = 200;
     private int minOneWayNetworkSize = 0;
+
+    // for LM prepare
+    private final LMAlgoFactoryDecorator lmFactoryDecorator = new LMAlgoFactoryDecorator();
+
+    // for CH prepare
+    private final CHAlgoFactoryDecorator chFactoryDecorator = new CHAlgoFactoryDecorator();
+
     // for data reader
     private String dataReaderFile;
     private double dataReaderWayPointMaxDistance = 1;
-    private int dataReaderWorkerThreads = -1;
+    private int dataReaderWorkerThreads = 2;
     private boolean calcPoints = true;
     private ElevationProvider eleProvider = ElevationProvider.NOOP;
     private FlagEncoderFactory flagEncoderFactory = FlagEncoderFactory.DEFAULT;
+    private final ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
 
     public GraphHopper() {
         chFactoryDecorator.setEnabled(true);
+        lmFactoryDecorator.setEnabled(false);
+
+        // order is important to use CH as base algo and set the approximation in the followed lm factory decorator
         algoDecorators.add(chFactoryDecorator);
+        algoDecorators.add(lmFactoryDecorator);
     }
 
     /**
@@ -282,73 +297,9 @@ public class GraphHopper implements GraphHopperAPI {
     }
 
     /**
-     * Wrapper method for {@link GraphHopper#setCHWeightings(List)}
+     * This method enabled or disables the speed mode (Contraction Hierarchies)
      *
-     * @deprecated This method is used as a deprecated wrapper to not break the JavaApi. This will
-     * be removed in 0.7. Please use {@link GraphHopper#setCHWeightings(List)} or
-     * {@link GraphHopper#setCHWeightings(String...)}
-     */
-    @Deprecated
-    public GraphHopper setCHWeighting(String weightingName) {
-        return this.setCHWeightings(weightingName);
-    }
-
-    /**
-     * Wrapper method for {@link GraphHopper#setCHWeightings(List)}
-     *
-     * @deprecated Use getCHFactoryDecorator().setWeightingsAsStrings() instead. Will be removed in
-     * 0.8.
-     */
-    public GraphHopper setCHWeightings(String... weightingNames) {
-        return this.setCHWeightings(Arrays.asList(weightingNames));
-    }
-
-    /**
-     * Returns all CHWeighting names
-     *
-     * @deprecated Use getCHFactoryDecorator().getWeightingsAsStrings() instead. Will be removed in
-     * 0.8.
-     */
-    public List<String> getCHWeightings() {
-        return chFactoryDecorator.getWeightingsAsStrings();
-    }
-
-    /**
-     * Enables the use of contraction hierarchies to reduce query times. Enabled by default.
-     *
-     * @param weightingList A list containing multiple weightings like: "fastest", "shortest" or
-     *                      your own weight-calculation type.
-     * @deprecated Use getCHFactoryDecorator().setWeightingsAsStrings() instead. Will be removed in
-     * 0.8.
-     */
-    public GraphHopper setCHWeightings(List<String> weightingList) {
-        ensureNotLoaded();
-        chFactoryDecorator.setWeightingsAsStrings(weightingList);
-        return this;
-    }
-
-    /**
-     * @deprecated Use getCHFactoryDecorator().getCHPrepareThreads() instead. Will be removed in
-     * 0.8.
-     */
-    public int getCHPrepareThreads() {
-        return chFactoryDecorator.getPreparationThreads();
-    }
-
-    /**
-     * This method changes the number of threads used for preparation on import. Default is 1. Make
-     * sure that you have enough memory to increase this number!
-     *
-     * @deprecated Use getCHFactoryDecorator().setCHPrepareThreads() instead. Will be removed in
-     * 0.8.
-     */
-    public GraphHopper setCHPrepareThreads(int prepareThreads) {
-        chFactoryDecorator.setPreparationThreads(prepareThreads);
-        return this;
-    }
-
-    /**
-     * @deprecated Use setEnabled() instead. Will be removed in 0.8.
+     * @deprecated use {@link #setCHEnabled(boolean)} instead
      */
     public GraphHopper setCHEnable(boolean enable) {
         return setCHEnabled(enable);
@@ -624,8 +575,10 @@ public class GraphHopper implements GraphHopperAPI {
         minNetworkSize = args.getInt("prepare.min_network_size", minNetworkSize);
         minOneWayNetworkSize = args.getInt("prepare.min_one_way_network_size", minOneWayNetworkSize);
 
-        // prepare CH
-        chFactoryDecorator.init(args);
+        // prepare CH, LM, ...
+        for (RoutingAlgorithmFactoryDecorator decorator : algoDecorators) {
+            decorator.init(args);
+        }
 
         // osm import
         dataReaderWayPointMaxDistance = args.getDouble(Routing.INIT_WAY_POINT_MAX_DISTANCE, dataReaderWayPointMaxDistance);
@@ -642,6 +595,7 @@ public class GraphHopper implements GraphHopperAPI {
         maxVisitedNodes = args.getInt(Routing.INIT_MAX_VISITED_NODES, Integer.MAX_VALUE);
         maxRoundTripRetries = args.getInt(RoundTrip.INIT_MAX_RETRIES, maxRoundTripRetries);
         nonChMaxWaypointDistance = args.getInt(Parameters.NON_CH.MAX_NON_CH_POINT_DISTANCE, Integer.MAX_VALUE);
+        blockedRectangularAreas = args.get(Routing.BLOCK_AREA, "");
 
         return this;
     }
@@ -672,7 +626,7 @@ public class GraphHopper implements GraphHopperAPI {
      */
     private GraphHopper process(String graphHopperLocation) {
         setGraphHopperLocation(graphHopperLocation);
-        Lock lock = null;
+        GHLock lock = null;
         try {
             if (ghStorage.getDirectory().getDefaultType().isStoring()) {
                 lockFactory.setLockDir(new File(graphHopperLocation));
@@ -730,7 +684,6 @@ public class GraphHopper implements GraphHopperAPI {
         return reader.setFile(new File(dataReaderFile)).
                 setElevationProvider(eleProvider).
                 setWorkerThreads(dataReaderWorkerThreads).
-                setEncodingManager(encodingManager).
                 setWayPointMaxDistance(dataReaderWayPointMaxDistance);
     }
 
@@ -776,6 +729,9 @@ public class GraphHopper implements GraphHopperAPI {
         GraphExtension ext = encodingManager.needsTurnCostsSupport()
                 ? new TurnCostExtension() : new GraphExtension.NoOpExtension();
 
+        if (lmFactoryDecorator.isEnabled())
+            initLMAlgoFactoryDecorator();
+
         if (chFactoryDecorator.isEnabled()) {
             initCHAlgoFactoryDecorator();
             ghStorage = new GraphHopperStorage(chFactoryDecorator.getWeightings(), dir, encodingManager, hasElevation(), ext);
@@ -788,7 +744,7 @@ public class GraphHopper implements GraphHopperAPI {
         if (!new File(graphHopperFolder).exists())
             return false;
 
-        Lock lock = null;
+        GHLock lock = null;
         try {
             // create locks only if writes are allowed, if they are not allowed a lock cannot be created 
             // (e.g. on a read only filesystem locks would fail)
@@ -833,22 +789,30 @@ public class GraphHopper implements GraphHopperAPI {
     }
 
     private void initCHAlgoFactoryDecorator() {
-        if (!chFactoryDecorator.hasWeightings())
+        if (!chFactoryDecorator.hasWeightings()) {
             for (FlagEncoder encoder : encodingManager.fetchEdgeEncoders()) {
                 for (String chWeightingStr : chFactoryDecorator.getWeightingsAsStrings()) {
-                    Weighting weighting = createWeighting(new HintsMap(chWeightingStr), encoder);
+                    Weighting weighting = createWeighting(new HintsMap(chWeightingStr), encoder, null);
                     chFactoryDecorator.addWeighting(weighting);
                 }
             }
+        }
     }
 
-    /**
-     * This method creates prepations.
-     *
-     * @deprecated use getCHFactoryDecorator().createPreparations() instead. Will be removed in 0.8.
-     */
-    protected void createCHPreparations() {
-        chFactoryDecorator.createPreparations(ghStorage, traversalMode);
+    public final LMAlgoFactoryDecorator getLMFactoryDecorator() {
+        return lmFactoryDecorator;
+    }
+
+    private void initLMAlgoFactoryDecorator() {
+        if (lmFactoryDecorator.hasWeightings())
+            return;
+
+        for (FlagEncoder encoder : encodingManager.fetchEdgeEncoders()) {
+            for (String lmWeightingStr : lmFactoryDecorator.getWeightingsAsStrings()) {
+                Weighting weighting = createWeighting(new HintsMap(lmWeightingStr), encoder, null);
+                lmFactoryDecorator.addWeighting(weighting);
+            }
+        }
     }
 
     /**
@@ -857,8 +821,9 @@ public class GraphHopper implements GraphHopperAPI {
     public void postProcessing() {
         // Later: move this into the GraphStorage.optimize method
         // Or: Doing it after preparation to optimize shortcuts too. But not possible yet #12
+
         if (sortGraph) {
-            if (ghStorage.isCHPossible() && isPrepared())
+            if (ghStorage.isCHPossible() && isCHPrepared())
                 throw new IllegalArgumentException("Sorting a prepared CHGraph is not possible yet. See #12");
 
             GraphHopperStorage newGraph = GHUtility.newStorage(ghStorage);
@@ -872,11 +837,15 @@ public class GraphHopper implements GraphHopperAPI {
         }
 
         initLocationIndex();
-        if (chFactoryDecorator.isEnabled())
-            createCHPreparations();
 
-        if (!isPrepared())
-            prepare();
+        if (chFactoryDecorator.isEnabled())
+            chFactoryDecorator.createPreparations(ghStorage, traversalMode);
+        if (!isCHPrepared())
+            prepareCH();
+
+        if (lmFactoryDecorator.isEnabled())
+            lmFactoryDecorator.createPreparations(ghStorage, traversalMode, locationIndex);
+        loadOrPrepareLM();
     }
 
     private void interpolateBridgesAndOrTunnels() {
@@ -899,10 +868,6 @@ public class GraphHopper implements GraphHopperAPI {
         }
     }
 
-    private boolean isPrepared() {
-        return "true".equals(ghStorage.getProperties().get("prepare.done"));
-    }
-
     /**
      * Based on the hintsMap and the specified encoder a Weighting instance can be
      * created. Note that all URL parameters are available in the hintsMap as String if
@@ -911,15 +876,30 @@ public class GraphHopper implements GraphHopperAPI {
      * @param hintsMap all parameters influencing the weighting. E.g. parameters coming via
      *                 GHRequest.getHints or directly via "&amp;api.xy=" from the URL of the web UI
      * @param encoder  the required vehicle
+     * @param graph    The Graph enables the Weighting for NodeAccess and more
      * @return the weighting to be used for route calculation
      * @see HintsMap
      */
-    public Weighting createWeighting(HintsMap hintsMap, FlagEncoder encoder) {
+    public Weighting createWeighting(HintsMap hintsMap, FlagEncoder encoder, Graph graph) {
         String weighting = hintsMap.getWeighting().toLowerCase();
 
         if (encoder.supports(GenericWeighting.class)) {
             DataFlagEncoder dataEncoder = (DataFlagEncoder) encoder;
-            return new GenericWeighting(dataEncoder, dataEncoder.readStringMap(hintsMap));
+            ConfigMap cMap = dataEncoder.readStringMap(hintsMap);
+
+            // add default blocked rectangular areas from config properties
+            if (!this.blockedRectangularAreas.isEmpty()) {
+                String val = this.blockedRectangularAreas;
+                String blockedAreasFromRequest = hintsMap.get(Parameters.Routing.BLOCK_AREA, "");
+                if (!blockedAreasFromRequest.isEmpty())
+                    val += ";" + blockedAreasFromRequest;
+                hintsMap.put(Parameters.Routing.BLOCK_AREA, val);
+            }
+
+            cMap = new GraphEdgeIdFinder(graph, locationIndex).parseStringHints(cMap, hintsMap, new DefaultEdgeFilter(encoder));
+            GenericWeighting genericWeighting = new GenericWeighting(dataEncoder, cMap);
+            genericWeighting.setGraph(graph);
+            return genericWeighting;
         } else if ("shortest".equalsIgnoreCase(weighting)) {
             return new ShortestWeighting(encoder);
         } else if ("fastest".equalsIgnoreCase(weighting) || weighting.isEmpty()) {
@@ -955,6 +935,9 @@ public class GraphHopper implements GraphHopperAPI {
         return response;
     }
 
+    /**
+     * This method calculates the alternative path list using the low level Path objects.
+     */
     public List<Path> calcPaths(GHRequest request, GHResponse ghRsp) {
         if (ghStorage == null || !fullyLoaded)
             throw new IllegalStateException("Do a successful call to load or importOrLoad before routing");
@@ -969,6 +952,8 @@ public class GraphHopper implements GraphHopperAPI {
             request.setVehicle(vehicle);
         }
 
+        Lock readLock = readWriteLock.readLock();
+        readLock.lock();
         try {
             if (!encodingManager.supports(vehicle))
                 throw new IllegalArgumentException("Vehicle " + vehicle + " unsupported. "
@@ -981,9 +966,16 @@ public class GraphHopper implements GraphHopperAPI {
                 tMode = hints.getBool(Routing.EDGE_BASED, false) ? TraversalMode.EDGE_BASED_2DIR : TraversalMode.NODE_BASED;
 
             FlagEncoder encoder = encodingManager.getEncoder(vehicle);
-            List<GHPoint> points = request.getPoints();
-            String algoStr = request.getAlgorithm().isEmpty() ? DIJKSTRA_BI : request.getAlgorithm();
 
+            boolean forceFlexibleMode = hints.getBool(CH.DISABLE, false);
+            if (!chFactoryDecorator.isDisablingAllowed() && forceFlexibleMode)
+                throw new IllegalArgumentException("Flexible mode not enabled on the server-side");
+            String algoStr = request.getAlgorithm();
+            if (algoStr.isEmpty())
+                algoStr = chFactoryDecorator.isEnabled() && !forceFlexibleMode &&
+                        !(lmFactoryDecorator.isEnabled() && !hints.getBool(Landmark.DISABLE, false)) ? DIJKSTRA_BI : ASTAR_BI;
+
+            List<GHPoint> points = request.getPoints();
             // TODO Maybe we should think about a isRequestValid method that checks all that stuff that we could do to fail fast
             // For example see #734
             checkIfPointsAreInBounds(points);
@@ -997,39 +989,43 @@ public class GraphHopper implements GraphHopperAPI {
                 routingTemplate = new ViaRoutingTemplate(request, ghRsp, locationIndex);
 
             List<Path> altPaths = null;
-            List<QueryResult> qResults = null;
             int maxRetries = routingTemplate.getMaxRetries();
             Locale locale = request.getLocale();
             Translation tr = trMap.getWithFallBack(locale);
             for (int i = 0; i < maxRetries; i++) {
                 StopWatch sw = new StopWatch().start();
-                qResults = routingTemplate.lookup(points, encoder);
+                List<QueryResult> qResults = routingTemplate.lookup(points, encoder);
                 ghRsp.addDebugInfo("idLookup:" + sw.stop().getSeconds() + "s");
                 if (ghRsp.hasErrors())
                     return Collections.emptyList();
 
                 RoutingAlgorithmFactory tmpAlgoFactory = getAlgorithmFactory(hints);
-                Weighting weighting = null;
-                Graph routingGraph = ghStorage;
-
-                boolean forceFlexibleMode = hints.getBool(CH.DISABLE, false);
-                if (!chFactoryDecorator.isDisablingAllowed() && forceFlexibleMode)
-                    throw new IllegalArgumentException("Flexible mode not enabled on the server-side");
+                Weighting weighting;
+                QueryGraph queryGraph;
 
                 if (chFactoryDecorator.isEnabled() && !forceFlexibleMode) {
                     boolean forceCHHeading = hints.getBool(CH.FORCE_HEADING, false);
                     if (!forceCHHeading && request.hasFavoredHeading(0))
                         throw new IllegalArgumentException("Heading is not (fully) supported for CHGraph. See issue #483");
-                    else if (!(tmpAlgoFactory instanceof PrepareContractionHierarchies))
+
+                    // if LM is enabled we have the LMFactory with the CH algo!
+                    RoutingAlgorithmFactory chAlgoFactory = tmpAlgoFactory;
+                    if (tmpAlgoFactory instanceof LMAlgoFactoryDecorator.LMRAFactory)
+                        chAlgoFactory = ((LMAlgoFactoryDecorator.LMRAFactory) tmpAlgoFactory).getDefaultAlgoFactory();
+
+                    if (chAlgoFactory instanceof PrepareContractionHierarchies)
+                        weighting = ((PrepareContractionHierarchies) chAlgoFactory).getWeighting();
+                    else
                         throw new IllegalStateException("Although CH was enabled a non-CH algorithm factory was returned " + tmpAlgoFactory);
 
                     tMode = getCHFactoryDecorator().getNodeBase();
-                    weighting = ((PrepareContractionHierarchies) tmpAlgoFactory).getWeighting();
-                    routingGraph = ghStorage.getGraph(CHGraph.class, weighting);
-
+                    queryGraph = new QueryGraph(ghStorage.getGraph(CHGraph.class, weighting));
+                    queryGraph.lookup(qResults);
                 } else {
                     checkNonChMaxWaypointDistance(points);
-                    weighting = createWeighting(hints, encoder);
+                    queryGraph = new QueryGraph(ghStorage);
+                    queryGraph.lookup(qResults);
+                    weighting = createWeighting(hints, encoder, queryGraph);
                     ghRsp.addDebugInfo("tmode:" + tMode.toString());
                 }
 
@@ -1037,8 +1033,6 @@ public class GraphHopper implements GraphHopperAPI {
                 if (maxVisitedNodesForRequest > maxVisitedNodes)
                     throw new IllegalArgumentException("The max_visited_nodes parameter has to be below or equal to:" + maxVisitedNodes);
 
-                QueryGraph queryGraph = new QueryGraph(routingGraph);
-                queryGraph.lookup(qResults);
                 weighting = createTurnWeighting(queryGraph, weighting, tMode);
 
                 AlgorithmOptions algoOpts = AlgorithmOptions.start().
@@ -1068,7 +1062,34 @@ public class GraphHopper implements GraphHopperAPI {
         } catch (IllegalArgumentException ex) {
             ghRsp.addError(ex);
             return Collections.emptyList();
+        } finally {
+            readLock.unlock();
         }
+    }
+
+    /**
+     * This method applies the changes to the graph specified as feature collection. It does so by locking the routing
+     * to avoid concurrent changes which could result in incorrect routing (like when done while a Dijkstra search) or
+     * also while just reading one edge row (inconsistent edge properties).
+     */
+    public ChangeGraphResponse changeGraph(Collection<JsonFeature> collection) {
+        // TODO allow calling this method if called before CH preparation
+        if (getCHFactoryDecorator().isEnabled())
+            throw new IllegalArgumentException("To use the changeGraph API you need to turn off CH");
+
+        Lock writeLock = readWriteLock.writeLock();
+        writeLock.lock();
+        try {
+            ChangeGraphHelper overlay = createChangeGraphHelper(ghStorage, locationIndex);
+            long updateCount = overlay.applyChanges(encodingManager, collection);
+            return new ChangeGraphResponse(updateCount);
+        } finally {
+            writeLock.unlock();
+        }
+    }
+
+    protected ChangeGraphHelper createChangeGraphHelper(Graph graph, LocationIndex locationIndex) {
+        return new ChangeGraphHelper(graph, locationIndex);
     }
 
     private void checkIfPointsAreInBounds(List<GHPoint> points) {
@@ -1124,18 +1145,38 @@ public class GraphHopper implements GraphHopperAPI {
         locationIndex = createLocationIndex(ghStorage.getDirectory());
     }
 
-    protected void prepare() {
+    private boolean isCHPrepared() {
+        return "true".equals(ghStorage.getProperties().get(CH.PREPARE + "done"))
+                // remove old property in >0.9
+                || "true".equals(ghStorage.getProperties().get("prepare.done"));
+    }
+
+    private boolean isLMPrepared() {
+        return "true".equals(ghStorage.getProperties().get(Landmark.PREPARE + "done"));
+    }
+
+    protected void prepareCH() {
         boolean tmpPrepare = chFactoryDecorator.isEnabled();
         if (tmpPrepare) {
             ensureWriteAccess();
 
-            if (chFactoryDecorator.getPreparationThreads() > 1 && dataAccessType.isMMap() && !dataAccessType.isSynched())
-                throw new IllegalStateException("You cannot execute CH preparation in parallel for MMAP without synching! Specify MMAP_SYNC or use 1 thread only");
-
             ghStorage.freeze();
             chFactoryDecorator.prepare(ghStorage.getProperties());
+            ghStorage.getProperties().put(CH.PREPARE + "done", true);
         }
-        ghStorage.getProperties().put("prepare.done", tmpPrepare);
+    }
+
+    /**
+     * For landmarks it is required to always call this method: either it creates the landmark data or it loads it.
+     */
+    protected void loadOrPrepareLM() {
+        boolean tmpPrepare = lmFactoryDecorator.isEnabled();
+        if (tmpPrepare) {
+            ensureWriteAccess();
+            ghStorage.freeze();
+            if (lmFactoryDecorator.loadOrDoWork(ghStorage.getProperties()))
+                ghStorage.getProperties().put(Landmark.PREPARE + "done", true);
+        }
     }
 
     /**
@@ -1146,7 +1187,6 @@ public class GraphHopper implements GraphHopperAPI {
         PrepareRoutingSubnetworks preparation = new PrepareRoutingSubnetworks(ghStorage, encodingManager.fetchEdgeEncoders());
         preparation.setMinNetworkSize(minNetworkSize);
         preparation.setMinOneWayNetworkSize(minOneWayNetworkSize);
-        logger.info("start finding subnetworks, " + Helper.getMemInfo());
         preparation.doWork();
         int currNodeCount = ghStorage.getNodes();
         logger.info("edges: " + ghStorage.getAllEdges().getMaxId() + ", nodes " + currNodeCount
@@ -1206,5 +1246,4 @@ public class GraphHopper implements GraphHopperAPI {
     public void setNonChMaxWaypointDistance(int nonChMaxWaypointDistance) {
         this.nonChMaxWaypointDistance = nonChMaxWaypointDistance;
     }
-
 }

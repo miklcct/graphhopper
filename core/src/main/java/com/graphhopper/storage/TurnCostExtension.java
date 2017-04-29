@@ -75,7 +75,7 @@ public class TurnCostExtension implements GraphExtension {
 
     @Override
     public TurnCostExtension create(long initBytes) {
-        turnCosts.create((long) initBytes * turnCostsEntryBytes);
+        turnCosts.create(initBytes);
         return this;
     }
 
@@ -178,7 +178,7 @@ public class TurnCostExtension implements GraphExtension {
             turnCostIndex = nextTurnCostIndex;
         }
         // so many turn restrictions on one node? here is something wrong
-        if (i > 1000)
+        if (i >= 1000)
             throw new IllegalStateException("something went wrong: there seems to be no end of the turn cost-list!?");
         return EMPTY_FLAGS;
     }

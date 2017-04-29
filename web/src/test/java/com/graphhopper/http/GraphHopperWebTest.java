@@ -27,6 +27,7 @@ import org.junit.Test;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
+import java.util.Arrays;
 
 import static org.junit.Assert.*;
 
@@ -50,7 +51,7 @@ public class GraphHopperWebTest {
         PathWrapper arsp = rsp.getBest();
         assertEquals(2138.3, arsp.getDistance(), 1e-1);
         assertEquals(17, arsp.getPoints().getSize());
-        assertEquals(5, arsp.getInstructions().getSize());
+        assertEquals(5, arsp.getInstructions().size());
         assertEquals("(0,Geradeaus auf A 100,1268.519329705091,65237)", arsp.getInstructions().get(0).toString());
         assertEquals(11, arsp.getInstructions().get(0).getPoints().size());
 
@@ -82,5 +83,11 @@ public class GraphHopperWebTest {
         req.getHints().put("algorithm", "algo1");
         req.getHints().put("alternative_route.max_paths", "4");
         instance.route(req);
+    }
+
+    @Test
+    public void testSimpleToStringStream() {
+        assertEquals("12;2", Arrays.asList("12", "2").stream().reduce("", (s1, s2) -> s1.isEmpty() ? s2 : s1 + ";" + s2));
+        assertEquals("2", Arrays.asList("2").stream().reduce("", (s1, s2) -> s1.isEmpty() ? s2 : s1 + ";" + s2));
     }
 }

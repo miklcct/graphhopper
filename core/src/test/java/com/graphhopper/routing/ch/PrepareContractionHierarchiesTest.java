@@ -17,6 +17,7 @@
  */
 package com.graphhopper.routing.ch;
 
+import com.carrotsearch.hppc.IntIndexedContainer;
 import com.graphhopper.routing.*;
 import com.graphhopper.routing.ch.PrepareContractionHierarchies.Shortcut;
 import com.graphhopper.routing.util.BikeFlagEncoder;
@@ -28,7 +29,6 @@ import com.graphhopper.routing.weighting.ShortestWeighting;
 import com.graphhopper.routing.weighting.Weighting;
 import com.graphhopper.storage.*;
 import com.graphhopper.util.*;
-import gnu.trove.list.TIntList;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -635,7 +635,7 @@ public class PrepareContractionHierarchiesTest {
         checkPath(ghStorage, bikeWeighting, 9, 5, Helper.createTList(3, 10, 14, 16, 13, 12));
     }
 
-    void checkPath(GraphHopperStorage ghStorage, Weighting w, int expShortcuts, double expDistance, TIntList expNodes) {
+    void checkPath(GraphHopperStorage ghStorage, Weighting w, int expShortcuts, double expDistance, IntIndexedContainer expNodes) {
         CHGraph lg = ghStorage.getGraph(CHGraph.class, w);
         PrepareContractionHierarchies prepare = new PrepareContractionHierarchies(dir, ghStorage, lg, w, tMode);
         prepare.doWork();
@@ -644,5 +644,32 @@ public class PrepareContractionHierarchiesTest {
         Path p = algo.calcPath(3, 12);
         assertEquals(w.toString(), expDistance, p.getDistance(), 1e-5);
         assertEquals(w.toString(), expNodes, p.calcNodes());
+    }
+
+    @Test
+    public void testShortcutMergeBug() {
+        // We refer to this real world situation http://www.openstreetmap.org/#map=19/52.71205/-1.77326
+        // assume the following graph:
+        //
+        // ---1---->----2-----3
+        //    \--------/
+        //
+        // where there are two roads from 1 to 2 and the directed road has a smaller weight
+        // leading to two shortcuts sc1 (unidir) and sc2 (bidir) where the second should NOT be rejected due to the larger weight
+        GraphHopperStorage g = createGHStorage();
+        g.edge(1, 2, 1, true);
+        g.edge(1, 2, 1, false);
+        g.edge(2, 3, 1, true);
+
+        CHGraph lg = g.getGraph(CHGraph.class);
+        PrepareContractionHierarchies prepare = new PrepareContractionHierarchies(dir, g, lg, weighting, tMode);
+        prepare.initFromGraph();
+
+        // order is important here
+        Shortcut sc1 = new Shortcut(1, 3, 6.81620625, 121.18);
+        Shortcut sc2 = new Shortcut(1, 3, 6.82048125, 121.25);
+        sc2.flags = PrepareEncoder.getScDirMask();
+        List<Shortcut> list = Arrays.asList(sc1, sc2);
+        assertEquals(2, prepare.addShortcuts(list));
     }
 }
