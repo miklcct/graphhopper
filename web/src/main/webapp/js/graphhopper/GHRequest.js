@@ -40,7 +40,7 @@ var GHRequest = function (host, api_key) {
     this.useMiles = false;
     // use jsonp here if host allows CORS
     this.dataType = "json";
-    this.api_params = {"locale": "en", "vehicle": "car", "weighting": "fastest", "elevation": false, "key": api_key};
+    this.api_params = {"locale": "en", "vehicle": "car", "weighting": "short_fastest", "elevation": false, "key": api_key};
 
     // register events
     this.route.addListener('route.add', function (evt) {
