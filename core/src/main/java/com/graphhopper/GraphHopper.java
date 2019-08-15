@@ -1,14 +1,14 @@
 /*
  *  Licensed to GraphHopper GmbH under one or more contributor
- *  license agreements. See the NOTICE file distributed with this work for 
+ *  license agreements. See the NOTICE file distributed with this work for
  *  additional information regarding copyright ownership.
- * 
- *  GraphHopper GmbH licenses this file to you under the Apache License, 
- *  Version 2.0 (the "License"); you may not use this file except in 
+ *
+ *  GraphHopper GmbH licenses this file to you under the Apache License,
+ *  Version 2.0 (the "License"); you may not use this file except in
  *  compliance with the License. You may obtain a copy of the License at
- * 
+ *
  *       http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  *  Unless required by applicable law or agreed to in writing, software
  *  distributed under the License is distributed on an "AS IS" BASIS,
  *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -41,6 +41,7 @@ import com.graphhopper.util.*;
 import com.graphhopper.util.Parameters.CH;
 import com.graphhopper.util.Parameters.Landmark;
 import com.graphhopper.util.Parameters.Routing;
+import com.graphhopper.util.details.PathDetailsBuilderFactory;
 import com.graphhopper.util.exceptions.PointDistanceExceededException;
 import com.graphhopper.util.exceptions.PointOutOfBoundsException;
 import com.graphhopper.util.shapes.BBox;
@@ -56,6 +57,9 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
+import static com.graphhopper.routing.ch.CHAlgoFactoryDecorator.EdgeBasedCHMode.EDGE_OR_NODE;
+import static com.graphhopper.routing.ch.CHAlgoFactoryDecorator.EdgeBasedCHMode.OFF;
+import static com.graphhopper.util.Helper.*;
 import static com.graphhopper.util.Parameters.Algorithms.*;
 
 /**
@@ -71,7 +75,6 @@ public class GraphHopper implements GraphHopperAPI {
     // utils
     private final TranslationMap trMap = new TranslationMap().doImport();
     boolean removeZipped = true;
-    boolean enableInstructions = true;
     // for graph:
     private GraphHopperStorage ghStorage;
     private EncodingManager encodingManager;
@@ -82,14 +85,13 @@ public class GraphHopper implements GraphHopperAPI {
     private boolean elevation = false;
     private LockFactory lockFactory = new NativeFSLockFactory();
     private boolean allowWrites = true;
-    private String preferredLanguage = "";
     private boolean fullyLoaded = false;
+    private boolean smoothElevation = false;
     // for routing
     private int maxRoundTripRetries = 3;
     private boolean simplifyResponse = true;
     private TraversalMode traversalMode = TraversalMode.NODE_BASED;
     private int maxVisitedNodes = Integer.MAX_VALUE;
-    private String blockedRectangularAreas = "";
 
     private int nonChMaxWaypointDistance = Integer.MAX_VALUE;
     // for index
@@ -114,6 +116,7 @@ public class GraphHopper implements GraphHopperAPI {
     private ElevationProvider eleProvider = ElevationProvider.NOOP;
     private FlagEncoderFactory flagEncoderFactory = FlagEncoderFactory.DEFAULT;
     private final ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
+    private PathDetailsBuilderFactory pathBuilderFactory = new PathDetailsBuilderFactory();
 
     public GraphHopper() {
         chFactoryDecorator.setEnabled(true);
@@ -207,6 +210,15 @@ public class GraphHopper implements GraphHopperAPI {
     public GraphHopper setTraversalMode(TraversalMode traversalMode) {
         this.traversalMode = traversalMode;
         return this;
+    }
+
+    public GraphHopper setPathDetailsBuilderFactory(PathDetailsBuilderFactory pathBuilderFactory) {
+        this.pathBuilderFactory = pathBuilderFactory;
+        return this;
+    }
+
+    public PathDetailsBuilderFactory getPathDetailsBuilderFactory() {
+        return pathBuilderFactory;
     }
 
     /**
@@ -345,44 +357,6 @@ public class GraphHopper implements GraphHopperAPI {
         return this;
     }
 
-    public boolean isEnableInstructions() {
-        return enableInstructions;
-    }
-
-    /**
-     * This method specifies if the import should include way names to be able to return
-     * instructions for a route.
-     */
-    public GraphHopper setEnableInstructions(boolean b) {
-        ensureNotLoaded();
-        enableInstructions = b;
-        return this;
-    }
-
-    public String getPreferredLanguage() {
-        return preferredLanguage;
-    }
-
-    /**
-     * This method specifies the preferred language for way names during import.
-     * <p>
-     * Language code as defined in ISO 639-1 or ISO 639-2.
-     * <ul>
-     * <li>If no preferred language is specified, only the default language with no tag will be
-     * imported.</li>
-     * <li>If a language is specified, it will be imported if its tag is found, otherwise fall back
-     * to default language.</li>
-     * </ul>
-     */
-    public GraphHopper setPreferredLanguage(String preferredLanguage) {
-        ensureNotLoaded();
-        if (preferredLanguage == null)
-            throw new IllegalArgumentException("preferred language cannot be null");
-
-        this.preferredLanguage = preferredLanguage;
-        return this;
-    }
-
     /**
      * This methods enables gps point calculation. If disabled only distance will be calculated.
      */
@@ -426,7 +400,7 @@ public class GraphHopper implements GraphHopperAPI {
      */
     public GraphHopper setDataReaderFile(String dataReaderFileStr) {
         ensureNotLoaded();
-        if (Helper.isEmpty(dataReaderFileStr))
+        if (isEmpty(dataReaderFileStr))
             throw new IllegalArgumentException("Data reader file cannot be empty.");
 
         dataReaderFile = dataReaderFileStr;
@@ -497,26 +471,29 @@ public class GraphHopper implements GraphHopperAPI {
         return this;
     }
 
+    public FlagEncoderFactory getFlagEncoderFactory() {
+        return this.flagEncoderFactory;
+    }
+
     /**
-     * Reads configuration from a CmdArgs object. Which can be manually filled, or via main(String[]
-     * args) ala CmdArgs.read(args) or via configuration file ala
-     * CmdArgs.readFromConfig("config.properties", "graphhopper.config")
+     * Reads the configuration from a CmdArgs object which can be manually filled, or via
+     * CmdArgs.read(String[] args)
      */
     public GraphHopper init(CmdArgs args) {
-        args = CmdArgs.readFromConfigAndMerge(args, "config", "graphhopper.config");
+        args.merge(CmdArgs.readFromSystemProperties());
         if (args.has("osmreader.osm"))
             throw new IllegalArgumentException("Instead osmreader.osm use datareader.file, for other changes see core/files/changelog.txt");
 
         String tmpOsmFile = args.get("datareader.file", "");
-        if (!Helper.isEmpty(tmpOsmFile))
+        if (!isEmpty(tmpOsmFile))
             dataReaderFile = tmpOsmFile;
 
         String graphHopperFolder = args.get("graph.location", "");
-        if (Helper.isEmpty(graphHopperFolder) && Helper.isEmpty(ghLocation)) {
-            if (Helper.isEmpty(dataReaderFile))
-                throw new IllegalArgumentException("You need to specify an OSM file.");
+        if (isEmpty(graphHopperFolder) && isEmpty(ghLocation)) {
+            if (isEmpty(dataReaderFile))
+                throw new IllegalArgumentException("If no graph.location is provided you need to specify an OSM file.");
 
-            graphHopperFolder = Helper.pruneFileEnd(dataReaderFile) + "-gh";
+            graphHopperFolder = pruneFileEnd(dataReaderFile) + "-gh";
         }
 
         // graph
@@ -530,8 +507,12 @@ public class GraphHopper implements GraphHopperAPI {
         removeZipped = args.getBool("graph.remove_zipped", removeZipped);
         int bytesForFlags = args.getInt("graph.bytes_for_flags", 4);
         String flagEncodersStr = args.get("graph.flag_encoders", "");
-        if (!flagEncodersStr.isEmpty())
-            setEncodingManager(new EncodingManager(flagEncoderFactory, flagEncodersStr, bytesForFlags));
+        if (!flagEncodersStr.isEmpty()) {
+            EncodingManager.Builder emBuilder = EncodingManager.createBuilder(flagEncoderFactory, flagEncodersStr, bytesForFlags);
+            emBuilder.setEnableInstructions(args.getBool("datareader.instructions", true));
+            emBuilder.setPreferredLanguage(args.get("datareader.preferred_language", ""));
+            setEncodingManager(emBuilder.build());
+        }
 
         if (args.get("graph.locktype", "native").equals("simple"))
             lockFactory = new SimpleFSLockFactory();
@@ -539,7 +520,8 @@ public class GraphHopper implements GraphHopperAPI {
             lockFactory = new NativeFSLockFactory();
 
         // elevation
-        String eleProviderStr = args.get("graph.elevation.provider", "noop").toLowerCase();
+        String eleProviderStr = toLowerCase(args.get("graph.elevation.provider", "noop"));
+        this.smoothElevation = args.getBool("graph.elevation.smoothing", false);
 
         // keep fallback until 0.8
         boolean eleCalcMean = args.has("graph.elevation.calcmean")
@@ -554,18 +536,25 @@ public class GraphHopper implements GraphHopperAPI {
         if (baseURL.isEmpty())
             args.get("graph.elevation.baseurl", "");
 
+        boolean removeTempElevationFiles = args.getBool("graph.elevation.cgiar.clear", true);
+        removeTempElevationFiles = args.getBool("graph.elevation.clear", removeTempElevationFiles);
+
         DAType elevationDAType = DAType.fromString(args.get("graph.elevation.dataaccess", "MMAP"));
         ElevationProvider tmpProvider = ElevationProvider.NOOP;
         if (eleProviderStr.equalsIgnoreCase("srtm")) {
-            tmpProvider = new SRTMProvider();
+            tmpProvider = new SRTMProvider(cacheDirStr);
         } else if (eleProviderStr.equalsIgnoreCase("cgiar")) {
-            CGIARProvider cgiarProvider = new CGIARProvider();
-            cgiarProvider.setAutoRemoveTemporaryFiles(args.getBool("graph.elevation.cgiar.clear", true));
-            tmpProvider = cgiarProvider;
+            tmpProvider = new CGIARProvider(cacheDirStr);
+        } else if (eleProviderStr.equalsIgnoreCase("gmted")) {
+            tmpProvider = new GMTEDProvider(cacheDirStr);
+        } else if (eleProviderStr.equalsIgnoreCase("srtmgl1")) {
+            tmpProvider = new SRTMGL1Provider(cacheDirStr);
+        } else if (eleProviderStr.equalsIgnoreCase("multi")) {
+            tmpProvider = new MultiSourceElevationProvider(cacheDirStr);
         }
 
+        tmpProvider.setAutoRemoveTemporaryFiles(removeTempElevationFiles);
         tmpProvider.setCalcMean(eleCalcMean);
-        tmpProvider.setCacheDir(new File(cacheDirStr));
         if (!baseURL.isEmpty())
             tmpProvider.setBaseURL(baseURL);
         tmpProvider.setDAType(elevationDAType);
@@ -584,8 +573,6 @@ public class GraphHopper implements GraphHopperAPI {
         dataReaderWayPointMaxDistance = args.getDouble(Routing.INIT_WAY_POINT_MAX_DISTANCE, dataReaderWayPointMaxDistance);
 
         dataReaderWorkerThreads = args.getInt("datareader.worker_threads", dataReaderWorkerThreads);
-        enableInstructions = args.getBool("datareader.instructions", enableInstructions);
-        preferredLanguage = args.get("datareader.preferred_language", preferredLanguage);
 
         // index
         preciseIndexResolution = args.getInt("index.high_resolution", preciseIndexResolution);
@@ -595,7 +582,6 @@ public class GraphHopper implements GraphHopperAPI {
         maxVisitedNodes = args.getInt(Routing.INIT_MAX_VISITED_NODES, Integer.MAX_VALUE);
         maxRoundTripRetries = args.getInt(RoundTrip.INIT_MAX_RETRIES, maxRoundTripRetries);
         nonChMaxWaypointDistance = args.getInt(Parameters.NON_CH.MAX_NON_CH_POINT_DISTANCE, Integer.MAX_VALUE);
-        blockedRectangularAreas = args.get(Routing.BLOCK_AREA, "");
 
         return this;
     }
@@ -637,7 +623,7 @@ public class GraphHopper implements GraphHopperAPI {
 
             try {
                 DataReader reader = importData();
-                DateFormat f = Helper.createFormatter();
+                DateFormat f = createFormatter();
                 ghStorage.getProperties().put("datareader.import.date", f.format(new Date()));
                 if (reader.getDataDate() != null)
                     ghStorage.getProperties().put("datareader.data.date", f.format(reader.getDataDate()));
@@ -663,10 +649,8 @@ public class GraphHopper implements GraphHopperAPI {
             throw new IllegalStateException("Couldn't load from existing folder: " + ghLocation
                     + " but also cannot use file for DataReader as it wasn't specified!");
 
-        encodingManager.setEnableInstructions(enableInstructions);
-        encodingManager.setPreferredLanguage(preferredLanguage);
         DataReader reader = createReader(ghStorage);
-        logger.info("using " + ghStorage.toString() + ", memory:" + Helper.getMemInfo());
+        logger.info("using " + ghStorage.toString() + ", memory:" + getMemInfo());
         reader.readGraph();
         return reader;
     }
@@ -684,7 +668,8 @@ public class GraphHopper implements GraphHopperAPI {
         return reader.setFile(new File(dataReaderFile)).
                 setElevationProvider(eleProvider).
                 setWorkerThreads(dataReaderWorkerThreads).
-                setWayPointMaxDistance(dataReaderWayPointMaxDistance);
+                setWayPointMaxDistance(dataReaderWayPointMaxDistance).
+                setSmoothElevation(this.smoothElevation);
     }
 
     /**
@@ -695,7 +680,7 @@ public class GraphHopper implements GraphHopperAPI {
      */
     @Override
     public boolean load(String graphHopperFolder) {
-        if (Helper.isEmpty(graphHopperFolder))
+        if (isEmpty(graphHopperFolder))
             throw new IllegalStateException("GraphHopperLocation is not specified. Call setGraphHopperLocation or init before");
 
         if (fullyLoaded)
@@ -734,7 +719,8 @@ public class GraphHopper implements GraphHopperAPI {
 
         if (chFactoryDecorator.isEnabled()) {
             initCHAlgoFactoryDecorator();
-            ghStorage = new GraphHopperStorage(chFactoryDecorator.getWeightings(), dir, encodingManager, hasElevation(), ext);
+            ghStorage = new GraphHopperStorage(chFactoryDecorator.getNodeBasedWeightings(), chFactoryDecorator.getEdgeBasedWeightings(),
+                    dir, encodingManager, hasElevation(), ext);
         } else {
             ghStorage = new GraphHopperStorage(dir, encodingManager, hasElevation(), ext);
         }
@@ -792,8 +778,14 @@ public class GraphHopper implements GraphHopperAPI {
         if (!chFactoryDecorator.hasWeightings()) {
             for (FlagEncoder encoder : encodingManager.fetchEdgeEncoders()) {
                 for (String chWeightingStr : chFactoryDecorator.getWeightingsAsStrings()) {
-                    Weighting weighting = createWeighting(new HintsMap(chWeightingStr), encoder, null);
-                    chFactoryDecorator.addWeighting(weighting);
+                    // ghStorage is null at this point
+                    CHAlgoFactoryDecorator.EdgeBasedCHMode edgeBasedCHMode = chFactoryDecorator.getEdgeBasedCHMode();
+                    if (!(edgeBasedCHMode == EDGE_OR_NODE && encoder.supports(TurnWeighting.class))) {
+                        chFactoryDecorator.addNodeBasedWeighting(createWeighting(new HintsMap(chWeightingStr), encoder, null));
+                    }
+                    if (edgeBasedCHMode != OFF && encoder.supports(TurnWeighting.class)) {
+                        chFactoryDecorator.addEdgeBasedWeighting(createWeighting(new HintsMap(chWeightingStr), encoder, null));
+                    }
                 }
             }
         }
@@ -828,7 +820,7 @@ public class GraphHopper implements GraphHopperAPI {
 
             GraphHopperStorage newGraph = GHUtility.newStorage(ghStorage);
             GHUtility.sortDFS(ghStorage, newGraph);
-            logger.info("graph sorted (" + Helper.getMemInfo() + ")");
+            logger.info("graph sorted (" + getMemInfo() + ")");
             ghStorage = newGraph;
         }
 
@@ -839,17 +831,17 @@ public class GraphHopper implements GraphHopperAPI {
         initLocationIndex();
 
         if (chFactoryDecorator.isEnabled())
-            chFactoryDecorator.createPreparations(ghStorage, traversalMode);
+            chFactoryDecorator.createPreparations(ghStorage);
         if (!isCHPrepared())
             prepareCH();
 
         if (lmFactoryDecorator.isEnabled())
-            lmFactoryDecorator.createPreparations(ghStorage, traversalMode, locationIndex);
+            lmFactoryDecorator.createPreparations(ghStorage, locationIndex);
         loadOrPrepareLM();
     }
 
     private void interpolateBridgesAndOrTunnels() {
-        if (ghStorage.getEncodingManager().supports("generic")) {
+        if (ghStorage.getEncodingManager().hasEncoder("generic")) {
             final FlagEncoder genericFlagEncoder = ghStorage.getEncodingManager()
                     .getEncoder("generic");
             if (!(genericFlagEncoder instanceof DataFlagEncoder)) {
@@ -881,41 +873,37 @@ public class GraphHopper implements GraphHopperAPI {
      * @see HintsMap
      */
     public Weighting createWeighting(HintsMap hintsMap, FlagEncoder encoder, Graph graph) {
-        String weighting = hintsMap.getWeighting().toLowerCase();
+        String weightingStr = toLowerCase(hintsMap.getWeighting());
+        Weighting weighting = null;
 
         if (encoder.supports(GenericWeighting.class)) {
-            DataFlagEncoder dataEncoder = (DataFlagEncoder) encoder;
-            ConfigMap cMap = dataEncoder.readStringMap(hintsMap);
-
-            // add default blocked rectangular areas from config properties
-            if (!this.blockedRectangularAreas.isEmpty()) {
-                String val = this.blockedRectangularAreas;
-                String blockedAreasFromRequest = hintsMap.get(Parameters.Routing.BLOCK_AREA, "");
-                if (!blockedAreasFromRequest.isEmpty())
-                    val += ";" + blockedAreasFromRequest;
-                hintsMap.put(Parameters.Routing.BLOCK_AREA, val);
-            }
-
-            cMap = new GraphEdgeIdFinder(graph, locationIndex).parseStringHints(cMap, hintsMap, new DefaultEdgeFilter(encoder));
-            GenericWeighting genericWeighting = new GenericWeighting(dataEncoder, cMap);
-            genericWeighting.setGraph(graph);
-            return genericWeighting;
-        } else if ("shortest".equalsIgnoreCase(weighting)) {
-            return new ShortestWeighting(encoder);
-        } else if ("fastest".equalsIgnoreCase(weighting) || weighting.isEmpty()) {
+            weighting = new GenericWeighting((DataFlagEncoder) encoder, hintsMap);
+        } else if ("shortest".equalsIgnoreCase(weightingStr)) {
+            weighting = new ShortestWeighting(encoder);
+        } else if ("fastest".equalsIgnoreCase(weightingStr) || weightingStr.isEmpty()) {
             if (encoder.supports(PriorityWeighting.class))
-                return new PriorityWeighting(encoder, hintsMap);
+                weighting = new PriorityWeighting(encoder, hintsMap);
             else
-                return new FastestWeighting(encoder, hintsMap);
-        } else if ("curvature".equalsIgnoreCase(weighting)) {
+                weighting = new FastestWeighting(encoder, hintsMap);
+        } else if ("curvature".equalsIgnoreCase(weightingStr)) {
             if (encoder.supports(CurvatureWeighting.class))
-                return new CurvatureWeighting(encoder, hintsMap);
+                weighting = new CurvatureWeighting(encoder, hintsMap);
 
-        } else if ("short_fastest".equalsIgnoreCase(weighting)) {
-            return new ShortFastestWeighting(encoder, hintsMap);
+        } else if ("short_fastest".equalsIgnoreCase(weightingStr)) {
+            weighting = new ShortFastestWeighting(encoder, hintsMap);
         }
 
-        throw new IllegalArgumentException("weighting " + weighting + " not supported");
+        if (weighting == null)
+            throw new IllegalArgumentException("weighting " + weightingStr + " not supported");
+
+        if (hintsMap.has(Routing.BLOCK_AREA)) {
+            String blockAreaStr = hintsMap.get(Parameters.Routing.BLOCK_AREA, "");
+            GraphEdgeIdFinder.BlockArea blockArea = new GraphEdgeIdFinder(graph, locationIndex).
+                    parseBlockArea(blockAreaStr, DefaultEdgeFilter.allEdges(encoder), hintsMap.getDouble("block_area.edge_id_max_area", 1000 * 1000));
+            return new BlockAreaWeighting(weighting, blockArea);
+        }
+
+        return weighting;
     }
 
     /**
@@ -955,9 +943,8 @@ public class GraphHopper implements GraphHopperAPI {
         Lock readLock = readWriteLock.readLock();
         readLock.lock();
         try {
-            if (!encodingManager.supports(vehicle))
-                throw new IllegalArgumentException("Vehicle " + vehicle + " unsupported. "
-                        + "Supported are: " + getEncodingManager());
+            if (!encodingManager.hasEncoder(vehicle))
+                throw new IllegalArgumentException("Vehicle not supported: " + vehicle + ". Supported are: " + encodingManager.toString());
 
             HintsMap hints = request.getHints();
             String tModeStr = hints.get("traversal_mode", traversalMode.toString());
@@ -967,13 +954,17 @@ public class GraphHopper implements GraphHopperAPI {
 
             FlagEncoder encoder = encodingManager.getEncoder(vehicle);
 
-            boolean forceFlexibleMode = hints.getBool(CH.DISABLE, false);
-            if (!chFactoryDecorator.isDisablingAllowed() && forceFlexibleMode)
-                throw new IllegalArgumentException("Flexible mode not enabled on the server-side");
+            boolean disableCH = hints.getBool(CH.DISABLE, false);
+            if (!chFactoryDecorator.isDisablingAllowed() && disableCH)
+                throw new IllegalArgumentException("Disabling CH not allowed on the server-side");
+
+            boolean disableLM = hints.getBool(Landmark.DISABLE, false);
+            if (!lmFactoryDecorator.isDisablingAllowed() && disableLM)
+                throw new IllegalArgumentException("Disabling LM not allowed on the server-side");
+
             String algoStr = request.getAlgorithm();
             if (algoStr.isEmpty())
-                algoStr = chFactoryDecorator.isEnabled() && !forceFlexibleMode &&
-                        !(lmFactoryDecorator.isEnabled() && !hints.getBool(Landmark.DISABLE, false)) ? DIJKSTRA_BI : ASTAR_BI;
+                algoStr = chFactoryDecorator.isEnabled() && !disableCH ? DIJKSTRA_BI : ASTAR_BI;
 
             List<GHPoint> points = request.getPoints();
             // TODO Maybe we should think about a isRequestValid method that checks all that stuff that we could do to fail fast
@@ -982,11 +973,11 @@ public class GraphHopper implements GraphHopperAPI {
 
             RoutingTemplate routingTemplate;
             if (ROUND_TRIP.equalsIgnoreCase(algoStr))
-                routingTemplate = new RoundTripRoutingTemplate(request, ghRsp, locationIndex, maxRoundTripRetries);
+                routingTemplate = new RoundTripRoutingTemplate(request, ghRsp, locationIndex, encodingManager, maxRoundTripRetries);
             else if (ALT_ROUTE.equalsIgnoreCase(algoStr))
-                routingTemplate = new AlternativeRoutingTemplate(request, ghRsp, locationIndex);
+                routingTemplate = new AlternativeRoutingTemplate(request, ghRsp, locationIndex, encodingManager);
             else
-                routingTemplate = new ViaRoutingTemplate(request, ghRsp, locationIndex);
+                routingTemplate = new ViaRoutingTemplate(request, ghRsp, locationIndex, encodingManager);
 
             List<Path> altPaths = null;
             int maxRetries = routingTemplate.getMaxRetries();
@@ -1003,7 +994,7 @@ public class GraphHopper implements GraphHopperAPI {
                 Weighting weighting;
                 QueryGraph queryGraph;
 
-                if (chFactoryDecorator.isEnabled() && !forceFlexibleMode) {
+                if (chFactoryDecorator.isEnabled() && !disableCH) {
                     boolean forceCHHeading = hints.getBool(CH.FORCE_HEADING, false);
                     if (!forceCHHeading && request.hasFavoredHeading(0))
                         throw new IllegalArgumentException("Heading is not (fully) supported for CHGraph. See issue #483");
@@ -1018,7 +1009,6 @@ public class GraphHopper implements GraphHopperAPI {
                     else
                         throw new IllegalStateException("Although CH was enabled a non-CH algorithm factory was returned " + tmpAlgoFactory);
 
-                    tMode = getCHFactoryDecorator().getNodeBase();
                     queryGraph = new QueryGraph(ghStorage.getGraph(CHGraph.class, weighting));
                     queryGraph.lookup(qResults);
                 } else {
@@ -1026,8 +1016,8 @@ public class GraphHopper implements GraphHopperAPI {
                     queryGraph = new QueryGraph(ghStorage);
                     queryGraph.lookup(qResults);
                     weighting = createWeighting(hints, encoder, queryGraph);
-                    ghRsp.addDebugInfo("tmode:" + tMode.toString());
                 }
+                ghRsp.addDebugInfo("tmode:" + tMode.toString());
 
                 int maxVisitedNodesForRequest = hints.getInt(Routing.MAX_VISITED_NODES, maxVisitedNodes);
                 if (maxVisitedNodesForRequest > maxVisitedNodes)
@@ -1041,17 +1031,23 @@ public class GraphHopper implements GraphHopperAPI {
                         hints(hints).
                         build();
 
+                // do the actual route calculation !
                 altPaths = routingTemplate.calcPaths(queryGraph, tmpAlgoFactory, algoOpts);
 
-                boolean tmpEnableInstructions = hints.getBool(Routing.INSTRUCTIONS, enableInstructions);
+                boolean tmpEnableInstructions = hints.getBool(Routing.INSTRUCTIONS, getEncodingManager().isEnableInstructions());
                 boolean tmpCalcPoints = hints.getBool(Routing.CALC_POINTS, calcPoints);
                 double wayPointMaxDistance = hints.getDouble(Routing.WAY_POINT_MAX_DISTANCE, 1d);
+
                 DouglasPeucker peucker = new DouglasPeucker().setMaxDistance(wayPointMaxDistance);
                 PathMerger pathMerger = new PathMerger().
                         setCalcPoints(tmpCalcPoints).
                         setDouglasPeucker(peucker).
                         setEnableInstructions(tmpEnableInstructions).
+                        setPathDetailsBuilders(pathBuilderFactory, request.getPathDetails()).
                         setSimplifyResponse(simplifyResponse && wayPointMaxDistance > 0);
+
+                if (request.hasFavoredHeading(0))
+                    pathMerger.setFavoredHeading(request.getFavoredHeading(0));
 
                 if (routingTemplate.isReady(pathMerger, tr))
                     break;
@@ -1097,7 +1093,7 @@ public class GraphHopper implements GraphHopperAPI {
         for (int i = 0; i < points.size(); i++) {
             GHPoint point = points.get(i);
             if (!bounds.contains(point.getLat(), point.getLon())) {
-                throw new PointOutOfBoundsException("Point " + i + " is ouf of bounds: " + point, i);
+                throw new PointOutOfBoundsException("Point " + i + " is out of bounds: " + point, i);
             }
         }
     }
@@ -1109,7 +1105,7 @@ public class GraphHopper implements GraphHopperAPI {
         GHPoint lastPoint = points.get(0);
         GHPoint point;
         double dist;
-        DistanceCalc calc = Helper.DIST_3D;
+        DistanceCalc calc = DIST_3D;
         for (int i = 1; i < points.size(); i++) {
             point = points.get(i);
             dist = calc.calcDist(lastPoint.getLat(), lastPoint.getLon(), point.getLat(), point.getLon());
@@ -1170,7 +1166,7 @@ public class GraphHopper implements GraphHopperAPI {
      * For landmarks it is required to always call this method: either it creates the landmark data or it loads it.
      */
     protected void loadOrPrepareLM() {
-        boolean tmpPrepare = lmFactoryDecorator.isEnabled();
+        boolean tmpPrepare = lmFactoryDecorator.isEnabled() && !lmFactoryDecorator.getPreparations().isEmpty();
         if (tmpPrepare) {
             ensureWriteAccess();
             ghStorage.freeze();
@@ -1189,17 +1185,17 @@ public class GraphHopper implements GraphHopperAPI {
         preparation.setMinOneWayNetworkSize(minOneWayNetworkSize);
         preparation.doWork();
         int currNodeCount = ghStorage.getNodes();
-        logger.info("edges: " + ghStorage.getAllEdges().getMaxId() + ", nodes " + currNodeCount
-                + ", there were " + preparation.getMaxSubnetworks()
-                + " subnetworks. removed them => " + (prevNodeCount - currNodeCount)
+        logger.info("edges: " + Helper.nf(ghStorage.getAllEdges().length()) + ", nodes " + Helper.nf(currNodeCount)
+                + ", there were " + Helper.nf(preparation.getMaxSubnetworks())
+                + " subnetworks. removed them => " + Helper.nf(prevNodeCount - currNodeCount)
                 + " less nodes");
     }
 
     protected void flush() {
         logger.info("flushing graph " + ghStorage.toString() + ", details:" + ghStorage.toDetailsString() + ", "
-                + Helper.getMemInfo() + ")");
+                + getMemInfo() + ")");
         ghStorage.flush();
-        logger.info("flushed graph " + Helper.getMemInfo() + ")");
+        logger.info("flushed graph " + getMemInfo() + ")");
         fullyLoaded = true;
     }
 
@@ -1230,7 +1226,7 @@ public class GraphHopper implements GraphHopperAPI {
             throw new IllegalStateException("Cannot clean GraphHopper without specified graphHopperLocation");
 
         File folder = new File(getGraphHopperLocation());
-        Helper.removeDir(folder);
+        removeDir(folder);
     }
 
     protected void ensureNotLoaded() {
@@ -1246,4 +1242,5 @@ public class GraphHopper implements GraphHopperAPI {
     public void setNonChMaxWaypointDistance(int nonChMaxWaypointDistance) {
         this.nonChMaxWaypointDistance = nonChMaxWaypointDistance;
     }
+
 }

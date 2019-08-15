@@ -44,23 +44,56 @@ public interface SpatialRuleLookup {
     SpatialRule lookupRule(GHPoint point);
 
     /**
-     * Add a rule to the lookup.
-     */
-    void addRule(SpatialRule rule);
-
-    /**
      * This method returns an identification number from 0 to size (exclusive) for the specified rule.
-     * The id is fix for a given set of SpatialRules. When the set of rules is modified, the id might change.
+     * The id is fix for a given set of SpatialRules.
      */
     int getSpatialId(SpatialRule rule);
 
     /**
-     * Returns the outer bounds of the spatial lookup.
+     * This method returns the SpatialRule for a given Spatial Id. This can be used when retrieving SpatialRules from
+     * a Spatial Id stored in the graph.
      */
-    BBox getBounds();
+    SpatialRule getSpatialRule(int spatialId);
 
     /**
      * @return the number of rules added to this lookup.
      */
     int size();
+
+    /**
+     * @return the bounds of the SpatialRuleLookup
+     */
+    BBox getBounds();
+
+    SpatialRuleLookup EMPTY = new SpatialRuleLookup() {
+        @Override
+        public SpatialRule lookupRule(double lat, double lon) {
+            return SpatialRule.EMPTY;
+        }
+
+        @Override
+        public SpatialRule lookupRule(GHPoint point) {
+            return SpatialRule.EMPTY;
+        }
+
+        @Override
+        public int getSpatialId(SpatialRule rule) {
+            return 0;
+        }
+
+        @Override
+        public SpatialRule getSpatialRule(int spatialId) {
+            return SpatialRule.EMPTY;
+        }
+
+        @Override
+        public int size() {
+            return 1;
+        }
+
+        @Override
+        public BBox getBounds() {
+            return new BBox(-180, 180, -90, 90);
+        }
+    };
 }

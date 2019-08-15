@@ -1,14 +1,14 @@
 /*
  *  Licensed to GraphHopper GmbH under one or more contributor
- *  license agreements. See the NOTICE file distributed with this work for 
+ *  license agreements. See the NOTICE file distributed with this work for
  *  additional information regarding copyright ownership.
- * 
- *  GraphHopper GmbH licenses this file to you under the Apache License, 
- *  Version 2.0 (the "License"); you may not use this file except in 
+ *
+ *  GraphHopper GmbH licenses this file to you under the Apache License,
+ *  Version 2.0 (the "License"); you may not use this file except in
  *  compliance with the License. You may obtain a copy of the License at
- * 
+ *
  *       http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  *  Unless required by applicable law or agreed to in writing, software
  *  distributed under the License is distributed on an "AS IS" BASIS,
  *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -42,7 +42,7 @@ public class HikeFlagEncoder extends FootFlagEncoder {
         this((int) properties.getLong("speedBits", 4),
                 properties.getDouble("speedFactor", 1));
         this.properties = properties;
-        this.setBlockFords(properties.getBool("block_fords", true));
+        this.setBlockFords(properties.getBool("block_fords", false));
     }
 
     public HikeFlagEncoder(String propertiesStr) {
@@ -62,53 +62,64 @@ public class HikeFlagEncoder extends FootFlagEncoder {
 
     @Override
     public int getVersion() {
-        return 2;
+        return 3;
     }
 
     @Override
-    public long acceptWay(ReaderWay way) {
+    public EncodingManager.Access getAccess(ReaderWay way) {
         String highwayValue = way.getTag("highway");
         if (highwayValue == null) {
+            EncodingManager.Access acceptPotentially = EncodingManager.Access.CAN_SKIP;
+
             if (way.hasTag("route", ferries)) {
                 String footTag = way.getTag("foot");
                 if (footTag == null || "yes".equals(footTag))
-                    return acceptBit | ferryBit;
+                    acceptPotentially = EncodingManager.Access.FERRY;
             }
 
             // special case not for all acceptedRailways, only platform
             if (way.hasTag("railway", "platform"))
-                return acceptBit;
+                acceptPotentially = EncodingManager.Access.WAY;
 
-            return 0;
+            if (way.hasTag("man_made", "pier"))
+                acceptPotentially = EncodingManager.Access.WAY;
+
+            if (!acceptPotentially.canSkip()) {
+                if (way.hasTag(restrictions, restrictedValues) && !getConditionalTagInspector().isRestrictedWayConditionallyPermitted(way))
+                    return EncodingManager.Access.CAN_SKIP;
+                return acceptPotentially;
+            }
+
+            return EncodingManager.Access.CAN_SKIP;
         }
+
+        // no need to evaluate ferries or fords - already included here
+        if (way.hasTag("foot", intendedValues))
+            return EncodingManager.Access.WAY;
+
+        // check access restrictions
+        if (way.hasTag(restrictions, restrictedValues) && !getConditionalTagInspector().isRestrictedWayConditionallyPermitted(way))
+            return EncodingManager.Access.CAN_SKIP;
 
         // hiking allows all sac_scale values
         // String sacScale = way.getTag("sac_scale");
         if (way.hasTag("sidewalk", sidewalkValues))
-            return acceptBit;
-
-        // no need to evaluate ferries or fords - already included here
-        if (way.hasTag("foot", intendedValues))
-            return acceptBit;
+            return EncodingManager.Access.WAY;
 
         if (!allowedHighwayTags.contains(highwayValue))
-            return 0;
+            return EncodingManager.Access.CAN_SKIP;
 
         if (way.hasTag("motorroad", "yes"))
-            return 0;
+            return EncodingManager.Access.CAN_SKIP;
 
         // do not get our feet wet, "yes" is already included above
         if (isBlockFords() && (way.hasTag("highway", "ford") || way.hasTag("ford")))
-            return 0;
-
-        // check access restrictions
-        if (way.hasTag(restrictions, restrictedValues) && !getConditionalTagInspector().isRestrictedWayConditionallyPermitted(way))
-            return 0;
+            return EncodingManager.Access.CAN_SKIP;
 
         if (getConditionalTagInspector().isPermittedWayConditionallyRestricted(way))
-            return 0;
+            return EncodingManager.Access.CAN_SKIP;
         else
-            return acceptBit;
+            return EncodingManager.Access.WAY;
     }
 
     @Override

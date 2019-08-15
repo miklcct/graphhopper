@@ -17,76 +17,132 @@
  */
 package com.graphhopper.reader.gtfs;
 
-import com.graphhopper.routing.util.FlagEncoder;
 import com.graphhopper.storage.Graph;
-import com.graphhopper.util.EdgeIterator;
 import com.graphhopper.util.EdgeIteratorState;
 
+import java.time.Instant;
 import java.util.Iterator;
 
-class Label {
+public class Label {
 
     static class Transition {
         final Label label;
-        final EdgeIteratorState edge;
+        final EdgeLabel edge;
 
-        Transition(Label label, EdgeIteratorState edge) {
+        Transition(Label label, EdgeLabel edge) {
             this.label = label;
             this.edge = edge;
         }
+
+        @Override
+        public String toString() {
+            return (edge != null ? edge.toString() + " -> " : "") + label.adjNode;
+        }
+
     }
 
-    final long currentTime;
+    static class EdgeLabel {
+        final EdgeIteratorState edgeIteratorState;
+        final GtfsStorage.EdgeType edgeType;
+        final int timeZoneId;
+        final int nTransfers;
+        final double distance;
+
+        public EdgeLabel(EdgeIteratorState edgeIteratorState, GtfsStorage.EdgeType edgeType, int timeZoneId, int nTransfers, double distance) {
+            this.edgeIteratorState = edgeIteratorState;
+            this.edgeType = edgeType;
+            this.timeZoneId = timeZoneId;
+            this.nTransfers = nTransfers;
+            this.distance = distance;
+        }
+
+        @Override
+        public String toString() {
+            return edgeType.toString();
+        }
+    }
+
+    public final long currentTime;
 
     final int edge;
-    final int adjNode;
+    public final int adjNode;
 
     final int nTransfers;
     final int nWalkDistanceConstraintViolations;
 
     final double walkDistanceOnCurrentLeg;
-    final long firstPtDepartureTime;
+    final Long departureTime;
+    final long walkTime;
+
+    final long residualDelay;
+    final boolean impossible;
 
     final Label parent;
 
-    Label(long currentTime, int edgeId, int adjNode, int nTransfers, int nWalkDistanceConstraintViolations, double walkDistance, long firstPtDepartureTime, Label parent) {
+    Label(long currentTime, int edgeId, int adjNode, int nTransfers, int nWalkDistanceConstraintViolations, double walkDistance, Long departureTime, long walkTime, long residualDelay, boolean impossible, Label parent) {
         this.currentTime = currentTime;
         this.edge = edgeId;
         this.adjNode = adjNode;
         this.nTransfers = nTransfers;
         this.nWalkDistanceConstraintViolations = nWalkDistanceConstraintViolations;
         this.walkDistanceOnCurrentLeg = walkDistance;
-        this.firstPtDepartureTime = firstPtDepartureTime;
+        this.departureTime = departureTime;
+        this.walkTime = walkTime;
+        this.residualDelay = residualDelay;
+        this.impossible = impossible;
         this.parent = parent;
     }
 
     @Override
     public String toString() {
-        return adjNode + " (" + edge + ") time: " + currentTime;
+        return adjNode + " " + Instant.ofEpochMilli(currentTime) + " " + nTransfers + " " + nWalkDistanceConstraintViolations + " " +  (departureTime != null ? Instant.ofEpochMilli(departureTime) : "");
     }
 
-    static Iterable<Transition> reverseEdges(Label leaf, Graph graph, boolean reverseEdgeFlags) {
+    static Iterable<Transition> reverseEdges(Label leaf, GraphExplorer graph, PtFlagEncoder flagEncoder, boolean reverseEdgeFlags) {
         return new Iterable<Transition>() {
             @Override
             public Iterator<Transition> iterator() {
                 return new Iterator<Transition>() {
+                    int i = 0;
                     Label label = leaf;
                     @Override
                     public boolean hasNext() {
-                        return label.parent != null;
+                        return reverseEdgeFlags ? label != null : label.parent != null;
                     }
 
                     @Override
                     public Transition next() {
-                        EdgeIteratorState edgeIteratorState = graph.getEdgeIteratorState(label.edge, label.parent.adjNode)
-                                .detach(reverseEdgeFlags);
-                        Transition transition = new Transition(label, edgeIteratorState);
-                        label = label.parent;
-                        return transition;
+                        if (i==0 && !reverseEdgeFlags) {
+                            ++i;
+                            return new Transition(label, null);
+                        } else {
+                            EdgeIteratorState edgeIteratorState = label.parent == null ? null :
+                                    graph.getEdgeIteratorState(label.edge, reverseEdgeFlags ? label.adjNode : label.parent.adjNode).detach(false);
+                            if (reverseEdgeFlags && edgeIteratorState != null && (edgeIteratorState.getBaseNode() != label.parent.adjNode || edgeIteratorState.getAdjNode() != label.adjNode)) {
+                                throw new IllegalStateException();
+                            }
+                            if (!reverseEdgeFlags && edgeIteratorState != null && (edgeIteratorState.getAdjNode() != label.parent.adjNode || edgeIteratorState.getBaseNode() != label.adjNode)) {
+                                throw new IllegalStateException();
+                            }
+
+                            Transition transition;
+                            if (reverseEdgeFlags) {
+                                transition = new Transition(label, edgeIteratorState != null ? getEdgeLabel(edgeIteratorState, flagEncoder) : null);
+                            } else {
+                                transition = new Transition(label.parent, edgeIteratorState != null ? getEdgeLabel(edgeIteratorState, flagEncoder) : null);
+                            }
+                            label = label.parent;
+                            return transition;
+                        }
                     }
                 };
             }
         };
+    }
+
+    private static EdgeLabel getEdgeLabel(EdgeIteratorState edgeIteratorState, PtFlagEncoder flagEncoder) {
+        return new EdgeLabel(edgeIteratorState, flagEncoder.getEdgeType(edgeIteratorState), edgeIteratorState.get(flagEncoder.getValidityIdEnc()),
+                edgeIteratorState.get(flagEncoder.getTransfersEnc()), edgeIteratorState.getDistance());
     }
 
 }

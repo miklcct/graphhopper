@@ -17,6 +17,8 @@
  */
 package com.graphhopper.routing.util.spatialrules;
 
+import com.graphhopper.util.shapes.Polygon;
+
 import java.util.List;
 
 /**
@@ -29,6 +31,12 @@ import java.util.List;
  */
 public interface SpatialRule {
 
+    enum Access {
+        YES,
+        CONDITIONAL,
+        NO
+    }
+
     /**
      * Return the max speed for a certain highway type. If there is no max speed defined, _default will be returned.
      *
@@ -39,29 +47,19 @@ public interface SpatialRule {
     double getMaxSpeed(String highway, double _default);
 
     /**
-     * Returns the {@link AccessValue} for a certain highway type and transportation mode. If nothing is defined,
+     * Returns the {@link Access} for a certain highway type and transportation mode. If nothing is defined,
      * _default will be returned.
      *
      * @param highwayTag         The highway type, e.g. primary, secondary
      * @param transportationMode The mode of transportation
      * @param _default           The default AccessValue
      */
-    AccessValue getAccessValue(String highwayTag, TransportationMode transportationMode, AccessValue _default);
+    Access getAccess(String highwayTag, TransportationMode transportationMode, Access _default);
 
     /**
      * Returns the borders in which the SpatialRule is valid
      */
     List<Polygon> getBorders();
-
-    /**
-     * Set the borders in which the SpatialRule is valid
-     */
-    SpatialRule setBorders(List<Polygon> borders);
-
-    /**
-     * Add a polygon to the borders in which the SpatialRule is valid
-     */
-    SpatialRule addBorder(Polygon polygon);
 
     /**
      * Returns the id for this rule, e.g. the ISO name of the country. The id has to be unique.
@@ -75,28 +73,18 @@ public interface SpatialRule {
         }
 
         @Override
-        public AccessValue getAccessValue(String highwayTag, TransportationMode transportationMode, AccessValue _default) {
-            return AccessValue.ACCESSIBLE;
+        public Access getAccess(String highwayTag, TransportationMode transportationMode, Access _default) {
+            return _default;
         }
 
         @Override
         public String getId() {
-            return "";
+            return "SpatialRule.EMPTY";
         }
 
         @Override
         public List<Polygon> getBorders() {
             throw new IllegalArgumentException("Empty rule does not have borders");
-        }
-
-        @Override
-        public SpatialRule setBorders(List<Polygon> borders) {
-            throw new IllegalArgumentException("Empty rule cannot have borders");
-        }
-
-        @Override
-        public SpatialRule addBorder(Polygon polygon) {
-            throw new IllegalArgumentException("Empty rule cannot have borders");
         }
 
         @Override
