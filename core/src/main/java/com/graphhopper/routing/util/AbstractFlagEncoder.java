@@ -574,8 +574,7 @@ public abstract class AbstractFlagEncoder implements FlagEncoder {
         double maxSpeed = getMaxSpeed(way);
         // We obey speed limits
         if (maxSpeed >= 0) {
-            // We assume that the average speed is the allowed maximum
-            return maxSpeed;
+            return speed > maxSpeed ? maxSpeed : speed;
         }
         return speed;
     }
