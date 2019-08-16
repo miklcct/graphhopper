@@ -85,8 +85,8 @@ public class MotorcycleFlagEncoder extends CarFlagEncoder {
         //avoidSet.add("motorroad");
         //avoidSet.add("residential");
 
-        preferSet.add("trunk");
-        preferSet.add("primary");
+        //preferSet.add("trunk");
+        //preferSet.add("primary");
         //preferSet.add("secondary");
         //preferSet.add("tertiary");
 
