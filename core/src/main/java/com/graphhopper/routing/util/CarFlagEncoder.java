@@ -131,8 +131,8 @@ public class CarFlagEncoder extends AbstractFlagEncoder {
         defaultSpeedMap.put("secondary", 35);
         defaultSpeedMap.put("secondary_link", 30);
         // streets without middle line separation
-        defaultSpeedMap.put("tertiary", 20);
-        defaultSpeedMap.put("tertiary_link", 15);
+        defaultSpeedMap.put("tertiary", 25);
+        defaultSpeedMap.put("tertiary_link", 20);
         defaultSpeedMap.put("unclassified", 15);
         defaultSpeedMap.put("residential", 15);
         // spielstraße

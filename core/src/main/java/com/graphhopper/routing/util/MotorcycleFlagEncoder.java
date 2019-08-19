@@ -103,7 +103,7 @@ public class MotorcycleFlagEncoder extends CarFlagEncoder {
         defaultSpeedMap.put("primary", 50);
         defaultSpeedMap.put("primary_link", 40);
         // linking towns + villages
-        defaultSpeedMap.put("secondary", 35);
+        defaultSpeedMap.put("secondary", 40);
         defaultSpeedMap.put("secondary_link", 30);
         // streets without middle line separation
         defaultSpeedMap.put("tertiary", 30);
