@@ -95,13 +95,13 @@ public class MotorcycleFlagEncoder extends CarFlagEncoder {
         // autobahn
         defaultSpeedMap.put("motorway", 70);
         defaultSpeedMap.put("motorway_link", 60);
-        defaultSpeedMap.put("motorroad", 60);
+        defaultSpeedMap.put("motorroad", 70);
         // bundesstraße
-        defaultSpeedMap.put("trunk", 55);
-        defaultSpeedMap.put("trunk_link", 40);
+        defaultSpeedMap.put("trunk", 60);
+        defaultSpeedMap.put("trunk_link", 50);
         // linking bigger town
-        defaultSpeedMap.put("primary", 45);
-        defaultSpeedMap.put("primary_link", 35);
+        defaultSpeedMap.put("primary", 50);
+        defaultSpeedMap.put("primary_link", 40);
         // linking towns + villages
         defaultSpeedMap.put("secondary", 35);
         defaultSpeedMap.put("secondary_link", 30);

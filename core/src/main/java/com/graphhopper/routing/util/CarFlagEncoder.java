@@ -118,18 +118,18 @@ public class CarFlagEncoder extends AbstractFlagEncoder {
         badSurfaceSpeedMap.add("compacted");
 
         // autobahn
-        defaultSpeedMap.put("motorway", 100);
+        defaultSpeedMap.put("motorway", 90);
         defaultSpeedMap.put("motorway_link", 70);
         defaultSpeedMap.put("motorroad", 80);
         // bundesstraße
         defaultSpeedMap.put("trunk", 70);
-        defaultSpeedMap.put("trunk_link", 40);
+        defaultSpeedMap.put("trunk_link", 55);
         // linking bigger town
         defaultSpeedMap.put("primary", 50);
-        defaultSpeedMap.put("primary_link", 35);
+        defaultSpeedMap.put("primary_link", 40);
         // linking towns + villages
-        defaultSpeedMap.put("secondary", 30);
-        defaultSpeedMap.put("secondary_link", 20);
+        defaultSpeedMap.put("secondary", 35);
+        defaultSpeedMap.put("secondary_link", 30);
         // streets without middle line separation
         defaultSpeedMap.put("tertiary", 20);
         defaultSpeedMap.put("tertiary_link", 15);
